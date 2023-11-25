@@ -28,8 +28,14 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+// 자는 리스트
+static struct list sleep_list;
+
 /* Idle thread. */
+// idle 스레드는 맨 처음 시작된 스레드 하나만 말한다
 static struct thread *idle_thread;
+
+static int64_t next_tick_to_awake = INT64_MAX;
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
@@ -108,6 +114,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
+	list_init (&sleep_list);
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -150,6 +157,9 @@ thread_tick (void) {
 		kernel_ticks++;
 
 	/* Enforce preemption. */
+
+	// 타임 슬라이스를 넘었다면
+	// 시간 지났다는 인터럽트를 발생시킨다
 	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
 }
@@ -222,6 +232,95 @@ thread_block (void) {
 	ASSERT (intr_get_level () == INTR_OFF);
 	thread_current ()->status = THREAD_BLOCKED;
 	schedule ();
+}
+
+// 스레드 재우기
+void
+thread_sleep(int64_t _Times)
+{
+	enum intr_level old_level = intr_disable ();
+	
+	thread_current()->wakeup_tick = _Times;
+	list_push_back (&sleep_list, &thread_current ()->elem);
+	thread_current ()->status = THREAD_BLOCKED;
+	update_next_tick_to_awake();
+	schedule ();
+
+	intr_set_level (old_level);
+}
+
+// sleep que에서 깨울 thread를 찾아 wake up 해준다
+void
+thread_awake(int64_t _Times)
+{
+	// 자는놈 없음
+	if(list_empty(&sleep_list))
+	{
+		return;
+	}
+
+	// 현재 틱 기준으로 깨울 놈 없음
+	if (_Times < next_tick_to_awake)
+	{
+		return;
+	}
+
+	struct list_elem* tempElem = list_begin(&sleep_list);
+	if(tempElem == NULL)
+		return;
+
+	struct list_elem* sleep_Tail = list_tail(&sleep_list);
+
+	while (tempElem != sleep_Tail &&
+			tempElem != NULL)
+	{
+		struct thread* t = list_entry (tempElem, struct thread, elem);
+		struct thread* n = tempElem->next;
+		if(_Times >= t->wakeup_tick)
+		{
+			t->status = THREAD_READY;
+			list_remove(tempElem);
+			list_push_back(&ready_list,tempElem);
+		}
+		tempElem = n;
+	}
+	
+	update_next_tick_to_awake();
+}
+
+// sleep list 내부에서 thread들이 가진 값 중 최솟값을 저장
+void update_next_tick_to_awake()
+{
+	if(list_empty(&sleep_list))
+	{
+		next_tick_to_awake = INT64_MAX;
+		return;
+	}
+
+	struct list_elem* tempElem = list_begin(&sleep_list);
+	if(tempElem == NULL)
+		return;
+
+	struct list_elem* sleep_Tail = list_tail(&sleep_list);
+
+	while (tempElem != sleep_Tail &&
+			tempElem != NULL)
+	{
+		struct thread* t = list_entry (tempElem, struct thread, elem);
+
+		if(next_tick_to_awake > t->wakeup_tick)
+		{
+			next_tick_to_awake = t->wakeup_tick;
+		}
+
+		tempElem = list_next(tempElem);
+	}
+}
+
+// 최솟 tick값을 반환
+int64_t get_next_tick_to_awake(void)
+{
+	return next_tick_to_awake;
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -302,8 +401,13 @@ thread_yield (void) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
+
+	// 현재 스레드가 idle 스레드가 아니다
 	if (curr != idle_thread)
+		// 준비 리스트에 넣는다
 		list_push_back (&ready_list, &curr->elem);
+
+	// 현재 스레드를 준비 상태로 만든다
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -421,6 +525,10 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
+		// 특정 지점 개체의 변수인 elem을 list에서 가지고 있다가
+		// 그 offset만큼 뺀 위치의 포인터를 반환하여
+		// thread* 로 캐스팅하여 반환   
+		// list elem 이 포함된 구조체 instance를 찾아 반환
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
@@ -525,6 +633,9 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
+
+// 현재 스레드를 status로 바꿔주고
+// schedule을 호출해줌
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
@@ -538,18 +649,24 @@ do_schedule(int status) {
 	schedule ();
 }
 
+// 다음 실행할 스레드를 스케쥴한다
 static void
 schedule (void) {
+	// 현재 실행 중인 스레드
 	struct thread *curr = running_thread ();
+
+	// 다음에 실행할 스레드
 	struct thread *next = next_thread_to_run ();
 
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (curr->status != THREAD_RUNNING);
 	ASSERT (is_thread (next));
 	/* Mark us as running. */
+	// 다음거 실행 상태로 만들기
 	next->status = THREAD_RUNNING;
 
 	/* Start new time slice. */
+	// 새로 실행하였다면 thread tick을 초기화한다
 	thread_ticks = 0;
 
 #ifdef USERPROG

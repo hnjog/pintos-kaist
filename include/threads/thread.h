@@ -107,6 +107,7 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+	int64_t wakeup_tick;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -142,5 +143,13 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+void thread_sleep(int64_t _Times);
+void thread_awake(int64_t _Times);
+
+// sleep queue에 있는 스레드 들 중
+// 최솟값을 저장
+void update_next_tick_to_awake();
+int64_t get_next_tick_to_awake(void);
 
 #endif /* threads/thread.h */
