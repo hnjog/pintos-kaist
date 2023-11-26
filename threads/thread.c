@@ -242,9 +242,8 @@ thread_sleep(int64_t _Times)
 	
 	thread_current()->wakeup_tick = _Times;
 	list_push_back (&sleep_list, &thread_current ()->elem);
-	thread_current ()->status = THREAD_BLOCKED;
 	update_next_tick_to_awake();
-	schedule ();
+	thread_block();
 
 	intr_set_level (old_level);
 }
@@ -278,9 +277,8 @@ thread_awake(int64_t _Times)
 		struct thread* n = tempElem->next;
 		if(_Times >= t->wakeup_tick)
 		{
-			t->status = THREAD_READY;
 			list_remove(tempElem);
-			list_push_back(&ready_list,tempElem);
+			thread_unblock(t);
 		}
 		tempElem = n;
 	}
