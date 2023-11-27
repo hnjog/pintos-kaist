@@ -135,7 +135,7 @@ void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
 int thread_get_priority (void);
-void thread_set_priority (int);
+void thread_set_priority (int); // 여기서 동기화 해줘야 할것 같은데
 
 int thread_get_nice (void);
 void thread_set_nice (int);
@@ -151,5 +151,8 @@ void thread_awake(int64_t _Times);
 // 최솟값을 저장
 void update_next_tick_to_awake();
 int64_t get_next_tick_to_awake(void);
+
+// priority Func
+bool cmp_priority(const struct list_elem* a,const struct list_elem* b, void* aux UNUSED);
 
 #endif /* threads/thread.h */

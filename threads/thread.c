@@ -217,6 +217,12 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	// 현재 실행되고 있는 스레드와 비교하기
+	// 우선순위가 더 높다면 이걸 집어넣는다
+	// yield 를 통하여 현재
+	if(t->priority > thread_get_priority())
+		thread_yield();
+
 	return tid;
 }
 
@@ -238,6 +244,27 @@ thread_block (void) {
 void
 thread_sleep(int64_t _Times)
 {
+	/*
+		인터럽트 비활성의 이유
+		1. 원자성(Atomicity) 보장
+		 - sleep list에 추가하고 thread_block을 호출하는 동안
+		   다른 인터럽트로 인하여 해당 과정의 '임계 영역'이 보장되지 않을 수 있음
+		2. 스케쥴러의 일관성을 유지
+		 - 인터럽트를 비활성화 하여, 스케쥴러가 스레드를 재우는 과정을 명시적으로 관리
+			(예상치 못한 문제를 예방)
+
+		인터럽트 비활성은 일종의
+		'동기화 매커니즘'
+
+		이는
+		임계영역을 보호하여, 데이터나 자원을 안전하게 접근하게 한다
+		또한, 작업이 중간에 '중단'되지 않게하여 '원자성'을 보장한다
+		=> 이를 통해 데이터의 일관성을 유지할 수 있음
+
+		(다만 인터럽트를 막는것은, 시스템 전체의 인터럽트를 막는 것이므로
+		시스템의 응답성을 저하시킬 수 있음)
+		(필요할 때 쓰고, 바로바로 풀어야 함)
+	*/
 	enum intr_level old_level = intr_disable ();
 	
 	thread_current()->wakeup_tick = _Times;
@@ -337,7 +364,9 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+
+	list_insert_ordered(&ready_list,&t->elem,cmp_priority,NULL);
+
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -403,7 +432,7 @@ thread_yield (void) {
 	// 현재 스레드가 idle 스레드가 아니다
 	if (curr != idle_thread)
 		// 준비 리스트에 넣는다
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list,&curr->elem,cmp_priority,NULL);
 
 	// 현재 스레드를 준비 상태로 만든다
 	do_schedule (THREAD_READY);
@@ -414,6 +443,22 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+
+	// 음... '현재' 스레드 값을 변경하기에
+	// ready_list를 정렬하는 것 자체는 의미가 없음
+	// 따라서 ready_list 내부에서 '가장 큰 값을 찾는 것이 더 올바른 것 같다
+
+	if(list_empty(&ready_list))
+		return;
+	// ready_list는 내림차순으로 이기에 (집어넣을때, sorted로 집어넣으므로)
+	// 그러므로 첫번째가 제일 큰 값이다
+	struct thread* bestPT = list_entry(list_front(&ready_list),struct thread, elem);
+	if(bestPT == NULL)
+		return;
+	
+	if(bestPT->priority > thread_current()->priority)
+		thread_yield();
+
 }
 
 /* Returns the current thread's priority. */
@@ -702,4 +747,15 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+bool cmp_priority(const struct list_elem* a,const struct list_elem* b, void* aux UNUSED)
+{
+	struct thread* aThread = list_entry (a, struct thread, elem);
+	struct thread* bThread = list_entry (b, struct thread, elem);
+
+	if(aThread->priority > bThread->priority)
+		return true;
+
+	return false;
 }
