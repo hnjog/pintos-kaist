@@ -12,7 +12,7 @@
 #include <list.h>
 #include <random.h>
 #include <stdio.h>
-#include "threads/test.h"
+//#include "threads/test.h"
 
 /* Maximum number of elements in a linked list that we will
    test. */
