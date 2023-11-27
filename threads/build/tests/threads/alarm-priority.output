@@ -1,0 +1,18 @@
+Kernel command line: -q run alarm-priority
+0 ~ 9fc00 1
+100000 ~ 13e0000 1
+Pintos booting with: 
+	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
+	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
+Calibrating timer...  117,760,000 loops/s.
+Boot complete.
+Executing 'alarm-priority':
+(alarm-priority) begin
+Kernel PANIC at ../../threads/thread.c:237 in thread_block(): assertion `intr_get_level () == INTR_OFF' failed.
+Call stack: 0x800421340c 0x8004206d11 0x800420787f 0x800420d0bc 0x800421760d 0x80042071cd.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 26 ticks
+Thread: 0 idle ticks, 26 kernel ticks, 0 user ticks
+Console: 

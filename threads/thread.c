@@ -45,9 +45,12 @@ static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
 
+
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
+
+int64_t global_next_ticks_to_awake;	/* minumum value of the wakeup ticks */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -62,6 +65,9 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+// void thread_sleep(int64_t ticks);
+// void thread_awake(int64_t ticks);
+
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -109,6 +115,14 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&ready_list);
+	
+	/* project1 */
+	list_init (&sleep_list);
+	/* sleeplist에서 가장 먼저 깨울 쓰레드 시간 지정용 변수
+	sleep할 때마다 비교 후 작은 값으로 변경할 것 */
+	global_next_ticks_to_awake = INT64_MAX;
+	
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -216,6 +230,7 @@ thread_create (const char *name, int priority,
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
+
 void
 thread_block (void) {
 	ASSERT (!intr_context ());
@@ -240,7 +255,7 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_push_back (&ready_list, &(t->elem));
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -292,8 +307,7 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
-/* Yields the CPU.  The current thread is not put to sleep and
-   may be scheduled again immediately at the scheduler's whim. */
+/* yield the cpu and insert thread to ready_list. */
 void
 thread_yield (void) {
 	struct thread *curr = thread_current ();
@@ -301,12 +315,18 @@ thread_yield (void) {
 
 	ASSERT (!intr_context ());
 
-	old_level = intr_disable ();
+	/* disable the interrupt and return the privious inturrupt state */
+	old_level = intr_disable (); 
+	/* If the current thread is not the idle_thread */
 	if (curr != idle_thread)
+		/* Inserting the given entry to the last of list */
 		list_push_back (&ready_list, &curr->elem);
+	/* Do context switch */
 	do_schedule (THREAD_READY);
+	/* Setting a state of inturrupt to old_level, which is the privious */
 	intr_set_level (old_level);
 }
+
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
@@ -364,7 +384,7 @@ idle (void *idle_started_ UNUSED) {
 	sema_up (idle_started);
 
 	for (;;) {
-		/* Let someone else run. */
+		/* Let someone else run. */ 
 		intr_disable ();
 		thread_block ();
 
@@ -462,6 +482,8 @@ do_iret (struct intr_frame *tf) {
    It's not safe to call printf() until the thread switch is
    complete.  In practice that means that printf()s should be
    added at the end of the function. */
+
+/* 문맥교환이 일어나는 함수 */
 static void
 thread_launch (struct thread *th) {
 	uint64_t tf_cur = (uint64_t) &running_thread ()->tf;
@@ -525,6 +547,7 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
+/* 상태값을 변경하고 스케줄을 호출 */
 static void
 do_schedule(int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
@@ -538,6 +561,7 @@ do_schedule(int status) {
 	schedule ();
 }
 
+/* 실행중인 스레드에서 다음스레드로 전환하는 함수 */
 static void
 schedule (void) {
 	struct thread *curr = running_thread ();
@@ -587,4 +611,48 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+/* The function that sets thread state to blocked and wait after insert it to sleep queue. */
+void
+thread_sleep (int64_t ticks) { 
+	struct thread *curr;
+
+	thread_block();
+
+	if (ticks < global_next_ticks_to_awake)
+		global_next_ticks_to_awake = ticks;
+	
+	curr->wakeup = ticks;
+
+	if (curr != idle_thread)
+		list_push_back (&sleep_list, &(curr->wakeup));
+	
+}
+/* The function that find the thread to wake up from sleep queue and wake up it.  */
+void
+thread_awake (int64_t ticks) {
+	global_next_ticks_to_awake = INT64_MAX;
+	struct list_elem *e= list_begin(&sleep_list);
+
+	ASSERT (intr_context ());
+ 
+	for (e = list_begin (&sleep_list); e != list_end(&sleep_list);) {
+		struct thread* t = list_entry(e, struct thread, elem);
+		
+		if (t->wakeup <= ticks) {
+			e = list_remove(e);
+			thread_unblock(t);
+		}
+		else {
+			if (t->wakeup < global_next_ticks_to_awake) {
+				global_next_ticks_to_awake = t->wakeup;
+			}
+			e = list_next(e);
+		}
+	}
+}
+
+int64_t get_next_tick_to_awake(void) {
+	return global_next_ticks_to_awake;
 }
