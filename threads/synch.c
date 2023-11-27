@@ -68,8 +68,11 @@ sema_down (struct semaphore *sema) {
 
 	// 다른 스레드가 반환할때까지 대기
 	while (sema->value == 0) {
-		//list_push_back (&sema->waiters, &thread_current ()->elem);
+		// 삽입될 때, 스레드 우선순위에 따라 삽입
 		list_insert_ordered(&sema->waiters,&thread_current()->elem,cmp_priority,NULL);
+
+		// 여기서 문맥교환하며
+		// 대기한다
 		thread_block ();
 	}
 	sema->value--;
@@ -112,15 +115,22 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
+
 	if (!list_empty (&sema->waiters))
 	{
+		// 차후, donation 과정에서 리스트 중간의 priority가 변형될 수 있기에
+		// 미리 sort함
 		list_sort(&sema->waiters,cmp_priority,NULL);
+
+		// thread_unblock해준다
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	}
 	sema->value++;
 	intr_set_level (old_level);
 
+	// unblock 한 녀석이 우선순위가 높다면 현재 실행되는 녀석이 아니라
+	// 그 녀석이 실행되어야 함
 	compare_Curr_ReadyList();
 }
 
@@ -197,6 +207,8 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	sema_down (&lock->semaphore);
+
+	// lock holder를 우선순위가 가장 높은 녀석으로
 	lock->holder = thread_current ();
 }
 
@@ -289,11 +301,26 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
+	// 0으로 초기화 하여, 밑의 sema_down에서 바로 '대기 상태'로 만들어준다 (문맥교환)
 	sema_init (&waiter.semaphore, 0);
-	//list_push_back (&cond->waiters, &waiter.elem);
+
+	// 모니터의 세마포어 리스트에 우선순위에 따라서 넣어준다
+	// 다만 비어있는 녀석이기에 가장 끝(내림차순)에 정렬될 것
 	list_insert_ordered(&cond->waiters,&waiter.elem,cmp_sem_priority,NULL);
+
+	// 락을 풀어준다(해당 락은 이진 세마포어(mutex) 들을 리스트로 가짐)
+	// (이전에 lock_acquire가 호출이 되었음)
+	// 이 위까지는 '원자적'인 작동이 보장됨 (lock이 되어 있었으므로)
 	lock_release (lock);
+
+	// 선언한 녀석의 p 연산을 통하여
+	// 문맥교환을 하기 위함
+	// 따라서 밑의 lock_acquire이 바로 호출되지는 않음
 	sema_down (&waiter.semaphore);
+
+	// 누군가가 sema_up을 호출해줌
+	// cond에 적절한 sema_up이 호출된 상태이다
+	// lock을 요청한다
 	lock_acquire (lock);
 }
 
@@ -311,10 +338,15 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
+	// cond(모니터) 내부에서 하나를 깨우려고 함
+	// 따라서 semaphore 리스트 를 정렬하여, 가장 높은 우선순위를 가진
+	// 녀석을 sema_up 해준다
 	if (!list_empty (&cond->waiters))
 	{
 		list_sort(&cond->waiters,cmp_sem_priority,NULL);
 
+		// thread_unblock 되는 녀석은 현재 block 된 녀석들 중
+		// 가장 우선순위가 높음
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 	}
@@ -340,9 +372,13 @@ bool cmp_sem_priority(const struct list_elem* a,const struct list_elem* b, void*
 	struct semaphore_elem* aSemaElem = list_entry (a, struct semaphore_elem, elem);
 	struct semaphore_elem* bSemaElem = list_entry (b, struct semaphore_elem, elem);
 
+	// 왼쪽 리스트 비어있으면
+	// 오른쪽이 더 큰 상황
 	if (list_empty(&aSemaElem->semaphore.waiters) == true)
 		return false;
 	
+	// 오른쪽 리스트 비어있으면
+	// 왼쪽이 더 크다
 	if(list_empty(&bSemaElem->semaphore.waiters) == true)
 		return true;
 
