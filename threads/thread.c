@@ -616,9 +616,11 @@ allocate_tid (void) {
 /* The function that sets thread state to blocked and wait after insert it to sleep queue. */
 void
 thread_sleep (int64_t ticks) { 
-	struct thread *curr;
+	struct thread *curr = thread_current();
+	enum intr_level old_level;
+	old_level = intr_disable (); 
 
-	thread_block();
+	// thread_block(); 여기서 호출하니까 무한루프에 빠졌었다
 
 	if (ticks < global_next_ticks_to_awake)
 		global_next_ticks_to_awake = ticks;
@@ -626,30 +628,42 @@ thread_sleep (int64_t ticks) {
 	curr->wakeup = ticks;
 
 	if (curr != idle_thread)
-		list_push_back (&sleep_list, &(curr->wakeup));
+		list_push_back (&sleep_list, &(curr->elem));
+
+	thread_block(); // 순서 바꾸니까 무한루프는 빠져나감
+
+	intr_set_level (old_level);
 	
 }
 /* The function that find the thread to wake up from sleep queue and wake up it.  */
 void
 thread_awake (int64_t ticks) {
 	global_next_ticks_to_awake = INT64_MAX;
+	
+	if (list_empty(&sleep_list))
+		return;
+	
 	struct list_elem *e= list_begin(&sleep_list);
+
 
 	ASSERT (intr_context ());
  
 	for (e = list_begin (&sleep_list); e != list_end(&sleep_list);) {
 		struct thread* t = list_entry(e, struct thread, elem);
-		
+		struct list_elem* ne;
+
+		ne = e->next; /* e의 next가 thread_unblock()함수때문에 readylist로 가버릴까바 미리 저장 */
+
 		if (t->wakeup <= ticks) {
-			e = list_remove(e);
+			list_remove(e);
 			thread_unblock(t);
 		}
-		else {
-			if (t->wakeup < global_next_ticks_to_awake) {
-				global_next_ticks_to_awake = t->wakeup;
-			}
-			e = list_next(e);
-		}
+
+		if (t->wakeup < global_next_ticks_to_awake) {
+			global_next_ticks_to_awake = t->wakeup;
+		}	
+
+		e = ne;
 	}
 }
 
