@@ -217,11 +217,8 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	// 현재 실행되고 있는 스레드와 비교하기
-	// 우선순위가 더 높다면 이걸 집어넣는다
-	// yield 를 통하여 현재
-	if(t->priority > thread_get_priority())
-		thread_yield();
+	// 내림차순 리스트의 가장 첫 요소와 현재 스레드랑 비교해줌
+	compare_Curr_ReadyList();
 
 	return tid;
 }
@@ -309,7 +306,11 @@ thread_awake(int64_t _Times)
 		}
 		tempElem = n;
 	}
-	
+
+	// 여기서 'cpu' 비교를 하지 않는 이유는
+	// 이 함수가 '하드웨어 인터럽트'인 'Timer interrupt'에 의하여 호출되고 있기에
+	// yield 내부에서 assert가 걸리기 때문
+
 	update_next_tick_to_awake();
 }
 
@@ -425,6 +426,8 @@ thread_yield (void) {
 	struct thread *curr = thread_current ();
 	enum intr_level old_level;
 
+	// 문맥교환해야 하기에
+	// 외부 인터럽트가 들어오면 안되는 상태이다
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
@@ -444,21 +447,7 @@ void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 
-	// 음... '현재' 스레드 값을 변경하기에
-	// ready_list를 정렬하는 것 자체는 의미가 없음
-	// 따라서 ready_list 내부에서 '가장 큰 값을 찾는 것이 더 올바른 것 같다
-
-	if(list_empty(&ready_list))
-		return;
-	// ready_list는 내림차순으로 이기에 (집어넣을때, sorted로 집어넣으므로)
-	// 그러므로 첫번째가 제일 큰 값이다
-	struct thread* bestPT = list_entry(list_front(&ready_list),struct thread, elem);
-	if(bestPT == NULL)
-		return;
-	
-	if(bestPT->priority > thread_current()->priority)
-		thread_yield();
-
+	compare_Curr_ReadyList();
 }
 
 /* Returns the current thread's priority. */
@@ -758,4 +747,18 @@ bool cmp_priority(const struct list_elem* a,const struct list_elem* b, void* aux
 		return true;
 
 	return false;
+}
+
+void compare_Curr_ReadyList()
+{
+	if(list_empty(&ready_list))
+		return;
+	// ready_list는 내림차순으로 이기에 (집어넣을때, sorted로 집어넣으므로)
+	// 그러므로 첫번째가 제일 큰 값이다
+	struct thread* bestPT = list_entry(list_front(&ready_list),struct thread, elem);
+	if(bestPT == NULL)
+		return;
+	
+	if(bestPT->priority > thread_get_priority())
+		thread_yield();
 }

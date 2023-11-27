@@ -155,4 +155,6 @@ int64_t get_next_tick_to_awake(void);
 // priority Func
 bool cmp_priority(const struct list_elem* a,const struct list_elem* b, void* aux UNUSED);
 
+void compare_Curr_ReadyList();
+
 #endif /* threads/thread.h */
