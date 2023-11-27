@@ -301,7 +301,7 @@ thread_awake(int64_t _Times)
 			tempElem != NULL)
 	{
 		struct thread* t = list_entry (tempElem, struct thread, elem);
-		struct thread* n = tempElem->next;
+		struct list_elem* n = tempElem->next;
 		if(_Times >= t->wakeup_tick)
 		{
 			list_remove(tempElem);
