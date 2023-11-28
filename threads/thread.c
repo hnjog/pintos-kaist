@@ -691,7 +691,8 @@ test_max_priority(void) {
 }
 
 /* 첫 번째 인자의 우선순위가 높으면 1을 반환, 두 번째 인자의 우선순위가 높으면 0을 반환 */
-bool cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) {
+bool
+cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) {
 	struct thread *a = list_entry(a_, struct thread, elem);
 	struct thread *b = list_entry(b_, struct thread, elem);
 	return a->priority > b->priority;
