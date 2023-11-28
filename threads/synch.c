@@ -200,15 +200,27 @@ lock_init (struct lock *lock) {
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+// 락을 획득하고, 필요한 경우 락을 얻을 때까지 대기(현재 스레드가 이미 락을 가지고 있지 않아야 함)
+// 이 함수는 인터럽트 핸들러 내에서 호출되면 안된다
 void
 lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	// lock 을 점유하고 있는 스레드와 요청하는 스레드의 우선순위를 비교하여
+	// 선점을 수행
+	// 이 함수가 호출되었다는 것은
+	// 누군가가 lock을 호출한 상태이다
+	// 지금은 현재 스레드를 lock의 대기자 리스트에 올려 놓음
+	// 그런데 lock을 '현재' 점유하는 thread 와
+	// 지금 요청하는 thread 의 우선순위를 비교하여
+	// 지금 요청하는 thread의 우선순위가 낮다면 기존대로
+	// lock을 가진 놈에게 뺏어야 한다(release lock)
+	// 근데 락을 푸는것은 해당 스레드 측이 해야 하는것 아닌가...??
+
 	sema_down (&lock->semaphore);
 
-	// lock holder를 우선순위가 가장 높은 녀석으로
 	lock->holder = thread_current ();
 }
 
@@ -244,6 +256,12 @@ lock_release (struct lock *lock) {
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
+
+	// lock을 해제한 후, 현재 스레드의 대기 리스트 갱신
+	// remove_with_lock()을 사용
+
+	// priority를 donation 받았을 수 있으므로 원래의 priority로 초기화
+	// refresh_priority()
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -313,9 +331,14 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	// 0으로 초기화 하여, 밑의 sema_down에서 바로 '대기 상태'로 만들어준다 (문맥교환)
-	// 이거 무조건 cond의 waiter 들의 세마포어들은
-	// 무조건 하나의 요소만 가지게 되나..?
-	// waiter.semaphore가 0이면 사실 mutex 같은 거 아닐까?
+	// 이거 cond의 waiter 들의 세마포어들은
+	// 하나의 요소만 가지게 되므로
+	// waiter.semaphore가 0이면 mutex 에 가까워짐
+	// 또한 추가적으로 cond->waiters를 지정하여
+	// list_insert 해주는 것은 아님
+	// 따라서 cond 는 'mutex'리스트를 가지고 다닌다고 생각한다
+	// 세마포어 쪽에서 '다수'의 리스트를 가지고 있다 가정하는 것은
+	// 말 그대로 이거와는 별도의 이야기이다
 	sema_init (&waiter.semaphore, 0);
 
 	// 모니터의 세마포어 리스트에 우선순위에 따라서 넣어준다
