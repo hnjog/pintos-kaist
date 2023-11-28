@@ -292,6 +292,17 @@ cond_init (struct condition *cond) {
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+
+// 이 함수는 lock을 해제하고, cond가 signal을 받을 때까지 대기한다
+// 이 함수 호출 시, lock을 호출해야 함
+// mesa 스타일의 모니터 함수이며
+// 신호를 보내고 받는 것은 atomic 하지 않음
+// mesa : 조건 변수의 대기(wait)와 신호(signal)이 스레드 간의 동기화에 영향을 주지 않음
+// 스레드가 조건 변수를 기다리고 있고, 누가 신호를 보내도, 누가 해당 신호를 받을지 보장되지 않음
+// 그렇기에, 신호를 받은 스레드는 자신의 조건을 다시 확인(조건에 맞지 않으면 다시 대기)
+// hoare : 대기와 신호가 동기화에 직접 영향을 줌
+// 신호가 발생하면 대기하고 있는 스레드가 신호를 받아 실행
+// mesa가 더 안정적이고, hoare가 더 빠른 응답성을 지님
 void
 cond_wait (struct condition *cond, struct lock *lock) {
 	struct semaphore_elem waiter;
@@ -302,6 +313,9 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	// 0으로 초기화 하여, 밑의 sema_down에서 바로 '대기 상태'로 만들어준다 (문맥교환)
+	// 이거 무조건 cond의 waiter 들의 세마포어들은
+	// 무조건 하나의 요소만 가지게 되나..?
+	// waiter.semaphore가 0이면 사실 mutex 같은 거 아닐까?
 	sema_init (&waiter.semaphore, 0);
 
 	// 모니터의 세마포어 리스트에 우선순위에 따라서 넣어준다
@@ -311,16 +325,24 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	// 락을 풀어준다(해당 락은 이진 세마포어(mutex) 들을 리스트로 가짐)
 	// (이전에 lock_acquire가 호출이 되었음)
 	// 이 위까지는 '원자적'인 작동이 보장됨 (lock이 되어 있었으므로)
+
+	// lock을 해제함으로서, 특정한 조건을 만족하도록 한다
+	// 일반적인 모니터는 모니터 내부의 스레드가 계속 lock을 유지하는 것이지만
+	// 해당 코드는 위에서 계속 cond->waiters에 넣어주는 것을 생각하고 있음
+	// (다만 윗부분은 atomic 함)
 	lock_release (lock);
 
 	// 선언한 녀석의 p 연산을 통하여
 	// 문맥교환을 하기 위함
 	// 따라서 밑의 lock_acquire이 바로 호출되지는 않음
+	// 여기서 wait 상태로 들어가고 lock이 풀려 있음
+	// 특정한 상황을 기다리기에 '조건 변수'라 할 수 있음
 	sema_down (&waiter.semaphore);
 
 	// 누군가가 sema_up을 호출해줌
 	// cond에 적절한 sema_up이 호출된 상태이다
 	// lock을 요청한다
+	// 조건 변수로 인하여 스레드가 깨어났을때, 반드시 락을 요청해야 함
 	lock_acquire (lock);
 }
 
@@ -338,7 +360,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	// cond(모니터) 내부에서 하나를 깨우려고 함
+	// cond 내부에서 하나를 깨우려고 함
 	// 따라서 semaphore 리스트 를 정렬하여, 가장 높은 우선순위를 가진
 	// 녀석을 sema_up 해준다
 	if (!list_empty (&cond->waiters))
