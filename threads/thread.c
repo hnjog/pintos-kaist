@@ -325,7 +325,7 @@ thread_yield (void) {
 	old_level = intr_disable (); 
 
 	if (curr != idle_thread)
-		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);
+		list_insert_ordered (&ready_list, &curr->elem, cmp_priority, NULL);
 
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
@@ -333,13 +333,14 @@ thread_yield (void) {
 
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-/* 현재 쓰레드의 우선순위와 ready_list에서 가장 높은 우선순위를 비교하여 스케쥴링하는 함수호출 */
+/* 현재 쓰레드의 우선순위를 인자로 받는 새로운 우선순위로 바꾸고 현재 쓰레드의 우선순위와 ready_list에서 가장 높은 우선순위를 비교하여 스케쥴링하는 함수호출 */
 void
 thread_set_priority (int new_priority) {
-	//Set priority of the current thread.
-	thread_current ()->priority = new_priority;
-	//Reorder the ready_list
-	list_sort(&ready_list, cmp_priority, NULL);
+	struct thread *curr = thread_current();
+	curr->priority = new_priority; // Set priority of the current thread.
+
+	if (!list_empty(&ready_list))
+		test_max_priority();
 }
 
 /* Returns the current thread's priority. */
