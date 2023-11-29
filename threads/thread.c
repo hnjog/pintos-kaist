@@ -682,7 +682,7 @@ test_max_priority(void) {
 	struct thread *curr = thread_current();
 	
 	if (!list_empty(&ready_list)) {
-		// list_begin(&ready_list); list_begin 이 list elem인데 이러헥 하면 안됐었댜
+		// list_begin(&ready_list); list_begin 이 list elem인데 이렇게 하는 것보다 list_entry(list_begin())
 		struct list_elem *top_t = list_begin(&ready_list);
 		/*  */
 		if (cmp_priority(top_t, &thread_current()->elem, NULL))

@@ -92,6 +92,9 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	int64_t wakeup;  					/* for the local tick */
+	/* DONATION */
+	int initial_pri;					/* 초기 우선순위 값을 저장할 필드 */
+	
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */

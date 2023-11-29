@@ -355,8 +355,8 @@ cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *au
  * a스레드의 우선순위가 더 높으면 1, otherwise 0*/
 bool
 cmp_sema_elem_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
-	struct semaphore_elem *semaElem_a = list_entry(a, struct thread, elem);
-	struct semaphore_elem *semaElem_b = list_entry(b, struct thread, elem);
+	struct semaphore_elem *semaElem_a = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *semaElem_b = list_entry(b, struct semaphore_elem, elem);
 
 	struct semaphore sema_a = semaElem_a->semaphore;
 	struct semaphore sema_b = semaElem_b->semaphore;
@@ -370,8 +370,8 @@ cmp_sema_elem_priority (const struct list_elem *a, const struct list_elem *b, vo
 	if(list_empty(waiters_b) == true)
 		return true;
 	
-	struct thread* t_a = list_begin(waiters_a);
-	struct thread* t_b = list_begin(waiters_b);
+	struct thread* t_a = list_entry(list_begin(waiters_a), struct thread, elem);
+	struct thread* t_b = list_entry(list_begin(waiters_b), struct thread, elem);
 	
 	return t_a->priority > t_b->priority;
 
