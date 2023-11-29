@@ -108,6 +108,16 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 	int64_t wakeup_tick;
+
+	// priority donation 관련 항목
+	//  donation 이후 우선순위를 초기화하기 위해, 초기 우선순위 값을 저장할 필드(int)
+	//  해당 쓰레드가 대기하고 있는 lock 자료구조의 주소를 저장할 필드 (lock*)
+	//  multiple donation을 고려한 리스트
+	//  해당 리스트를 고려한 elem도 필요
+	int initPriority;
+	struct lock* lpWaitLock;
+	struct list waitList; 		// multiple donation에서 내 lock이 풀리기를 기다리는 thread 들
+	struct list_elem waitElem;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -156,5 +166,10 @@ int64_t get_next_tick_to_awake(void);
 bool cmp_priority(const struct list_elem* a,const struct list_elem* b, void* aux UNUSED);
 
 void compare_Curr_ReadyList();
+
+// donation Func
+void donate_priority(void);
+void remove_with_lock(struct lock* _lock);
+void refresh_priority(void);
 
 #endif /* threads/thread.h */

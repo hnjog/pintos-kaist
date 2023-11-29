@@ -24,6 +24,8 @@
    Do not modify this value. */
 #define THREAD_BASIC 0xd42df210
 
+#define NESTED_DEPTH 8
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -445,7 +447,17 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	thread_current ()->initPriority = new_priority;
+
+	// 리스트 없을 때도 강제로 원래 initpriority로 바꿔주는 부분 때문에
+	// listwait가 비어있을 땐, 바꾸지 못하게 하여야 함
+	// 또한 나중에 lock_release 할때, 원래 락이 필요한 녀석과 같은 priority를 가졌기에
+	// 그 때는 initpriority로 비교해야 한다
+	// condvar 에서 문제되는 부분은 원래는 바로 0이 아닌 32이기에
+	// 발생하는 문제임
+	refresh_priority();
+
+	donate_priority();
 
 	compare_Curr_ReadyList();
 }
@@ -453,7 +465,9 @@ thread_set_priority (int new_priority) {
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
-	return thread_current ()->priority;
+	struct thread* curr = thread_current ();
+	int pri = curr->priority;
+	return pri;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -545,6 +559,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	t->initPriority = priority;
+	list_init(&t->waitList);
+	t->lpWaitLock = NULL;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -761,4 +779,101 @@ void compare_Curr_ReadyList()
 	
 	if(bestPT->priority > thread_get_priority())
 		thread_yield();
+}
+
+void donate_priority(void)
+{
+	// priority donation을 수행
+	// 현재 스레드가 기다리고 있는 lock과 연결된 모든 쓰레드들을 순회하며
+	// 현재 쓰레드의 우선순위를 lock을 보유하고 있는 스레드에게 줌
+	// ex : 현재 스레드가 기다리고 있는 락의 holder
+	// -> holder가 기다리고 있는 lock의 holder... (이건 8번 제한)
+
+	if(thread_current()->lpWaitLock == NULL)
+		return;
+
+	struct thread* lpLockHaveThread = thread_current()->lpWaitLock->holder;
+	int current_Priority = thread_get_priority();
+
+	int i = 0;
+
+	while (i < NESTED_DEPTH &&
+			lpLockHaveThread != NULL)
+	{
+		if(lpLockHaveThread->priority < current_Priority)
+		{
+			lpLockHaveThread->priority = current_Priority;
+		}
+		else
+		{
+			break;
+		}
+		
+		if(lpLockHaveThread->lpWaitLock == NULL)
+			break;
+		lpLockHaveThread = lpLockHaveThread->lpWaitLock->holder;
+		i++;
+	}
+}
+
+void remove_with_lock(struct lock* _lock)
+{
+	// 현재 스레드의 waiters list를 확인하여 해지할 lock을 보유하고 있는 엔트리를 삭제
+	// 현재 스레드의 waiter list에 존재하는 것은 각각
+	// 락을 존재하는 녀석들이다
+	if(_lock == NULL)
+		return;
+
+	if(list_empty(&thread_current()->waitList))
+		return;
+
+	struct thread* curr = thread_current();
+
+	struct list_elem* tempElem = list_front(&curr->waitList);
+	struct list_elem* endElem = list_end(&curr->waitList);
+
+	struct thread* t;
+	while (tempElem != endElem)
+	{
+		// sema 기준으로 curr->waitlist가 비어있지 않고 이상한 녀석이 들어가 있음
+		// 음... 혹시 main이 들어가있는건 아닌지...??
+		// main은 waitlist에 들어가지 않을텐데..??
+
+		// 음.. low 기준으로 waitlist에 h가 들어있을텐데
+		// h가 lock을 해제하면서
+		// low에 있는 자신의 waitlist를 해제하지 않아 발생한 문제??
+
+
+		t = list_entry(tempElem,struct thread,waitElem);
+		if(t->lpWaitLock == _lock)
+		{
+			tempElem = list_remove(tempElem);
+		}
+		else
+		{
+			tempElem = tempElem->next;
+		}
+	}
+}
+
+void refresh_priority(void)
+{
+	// 현재 쓰레드의 우선순위를 기부 받기 전의 우선순위로 변경
+	// 현재 쓰레드의 waiters 리스트에서 가장 높은 우선순위를 현재 쓰레드의 우선순위와 비교 후 우선순위 설정
+	thread_current()->priority = thread_current()->initPriority;
+
+	// 음... 낮게 설정하는 데 강제로 바꾸는것이 뭔가 좀 아닌것 같은데
+	if (list_empty(&thread_current()->waitList))
+		return;
+
+	int max_priority = thread_get_priority();
+
+	struct thread* t = list_entry(list_front(&thread_current()->waitList),struct thread,waitElem);
+	if(t != NULL)
+	{
+		if(t->priority > max_priority)
+			max_priority = t->priority;
+	}
+
+	thread_current()->priority = max_priority;
 }

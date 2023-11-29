@@ -127,11 +127,10 @@ sema_up (struct semaphore *sema) {
 					struct thread, elem));
 	}
 	sema->value++;
-	intr_set_level (old_level);
-
 	// unblock 한 녀석이 우선순위가 높다면 현재 실행되는 녀석이 아니라
 	// 그 녀석이 실행되어야 함
 	compare_Curr_ReadyList();
+	intr_set_level (old_level);
 }
 
 static void sema_test_helper (void *sema_);
@@ -208,20 +207,24 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
-	// lock 을 점유하고 있는 스레드와 요청하는 스레드의 우선순위를 비교하여
-	// 선점을 수행
-	// 이 함수가 호출되었다는 것은
-	// 누군가가 lock을 호출한 상태이다
-	// 지금은 현재 스레드를 lock의 대기자 리스트에 올려 놓음
-	// 그런데 lock을 '현재' 점유하는 thread 와
-	// 지금 요청하는 thread 의 우선순위를 비교하여
-	// 지금 요청하는 thread의 우선순위가 낮다면 기존대로
-	// lock을 가진 놈에게 뺏어야 한다(release lock)
-	// 근데 락을 푸는것은 해당 스레드 측이 해야 하는것 아닌가...??
+	// 내부에 holder가 존재하여 wait를 해야한다면
+	// wait를 하게 될 lock 자료구조 포인터를 저장(thread에 추가한 것)
+	// lock의 현재 holder의 대기자 list에 추가 (holder->waitlist)
+	// donate_priority 호출
+	// lock 획득 후, lock의 holder를 갱신
 
-	sema_down (&lock->semaphore);
+	if(lock->holder != NULL)
+	{
+		thread_current()->lpWaitLock = lock;
 
-	lock->holder = thread_current ();
+		list_insert_ordered(&lock->holder->waitList, &thread_current()->waitElem, cmp_priority, NULL);
+
+		donate_priority();
+	}
+
+	sema_down(&lock->semaphore);
+
+	lock->holder = thread_current();
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -254,14 +257,14 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	remove_with_lock(lock);
+	
+	refresh_priority();
+	
 	lock->holder = NULL;
+	
 	sema_up (&lock->semaphore);
 
-	// lock을 해제한 후, 현재 스레드의 대기 리스트 갱신
-	// remove_with_lock()을 사용
-
-	// priority를 donation 받았을 수 있으므로 원래의 priority로 초기화
-	// refresh_priority()
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -343,6 +346,9 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	// 모니터의 세마포어 리스트에 우선순위에 따라서 넣어준다
 	// 다만 비어있는 녀석이기에 가장 끝(내림차순)에 정렬될 것
+
+	// 애초에 그렇다면 기존 코드가 틀린것은 아닌것 같은데?
+	//list_push_back(&cond->waiters,&waiter.elem);
 	list_insert_ordered(&cond->waiters,&waiter.elem,cmp_sem_priority,NULL);
 
 	// 락을 풀어준다(해당 락은 이진 세마포어(mutex) 들을 리스트로 가짐)
