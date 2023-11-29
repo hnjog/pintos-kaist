@@ -682,7 +682,8 @@ test_max_priority(void) {
 	struct thread *curr = thread_current();
 	
 	if (!list_empty(&ready_list)) {
-		struct thread *top_t = list_begin(&ready_list);
+		// list_begin(&ready_list); list_begin 이 list elem인데 이러헥 하면 안됐었댜
+		struct list_elem *top_t = list_begin(&ready_list);
 		/*  */
 		if (cmp_priority(top_t, &thread_current()->elem, NULL))
 			thread_yield();
@@ -692,7 +693,7 @@ test_max_priority(void) {
 
 /* 첫 번째 인자의 우선순위가 높으면 1을 반환, 두 번째 인자의 우선순위가 높으면 0을 반환 */
 bool
-cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) {
+cmp_priority (const struct list_elem *a_, const struct list_elem *b_, void *aux) {
 	struct thread *a = list_entry(a_, struct thread, elem);
 	struct thread *b = list_entry(b_, struct thread, elem);
 	return a->priority > b->priority;

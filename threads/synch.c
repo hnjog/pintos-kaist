@@ -66,11 +66,12 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_sort(&sema->waiters, cmp_priority, NULL); // Semaphore를얻고waiters 리스트삽입시, 우선순위대로삽입되도록수정
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		// PSS - Semaphore를얻고waiters 리스트삽입시, 우선순위대로삽입되도록수정
+		list_insert_ordered (&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);
 		thread_block ();
 	}
 	sema->value--;
+	// test_max_priority();
 	intr_set_level (old_level);
 }
 
@@ -116,12 +117,11 @@ sema_up (struct semaphore *sema) {
 					struct thread, elem));
 	}
 	sema->value++;
-	// 세마포어해제후 waiter list를 우선순위로 정리
-	list_sort(&sema->waiters, cmp_priority, NULL);
 	// priority preemption 기능추가.
 	// waitlist 에서 나가면 readylist로 가기 때문에, preemtion을 readylist의 맨 앞에있는 친구와 현재 스레드를 비교하면 되니까
 	// 이 기능이 이미 구현이 되어있는 test_max_priority()를 호출해서 preemtion을 맞춘다.
-	test_max_priority();
+	//test_max_priority();
+	thread_yield();
 	intr_set_level (old_level);
 }
 
@@ -284,7 +284,12 @@ cond_init (struct condition *cond) {
 /**
  *  LOCK을 원자적으로 해제하고 다른 코드에서 COND가 신호를 보낼 때까지 대기합니다. 
  *  COND가 신호를 받은 후에는 반환하기 전에 LOCK을 다시 획득합니다
- *  특정 조건 변수는 하나의 락과만 연관되어 있지만 하나의 락은 여러 개의 조건 변수와 연관될 수 있습니다. 즉, 락에서 조건 변수로의 일대다 매핑이 있습니다.*/
+ *  특정 조건 변수는 하나의 락과만 연관되어 있지만 하나의 락은 여러 개의 조건 변수와 연관될 수 있습니다. 즉, 락에서 조건 변수로의 일대다 매핑이 있습니다.
+ *  cond_wait함수는 호출되기 전에 스레드에 lock이 걸리고,
+ *  sema_down전에 lock이 해제되었다가 깨어난 뒤에 다시 lock을 걸고 리턴한다.
+ * 
+ *  호출되면 프로세스는 block state가 되고
+ *  condition variable로부터 오는 시그널을 기다린다.*/
 void
 cond_wait (struct condition *cond, struct lock *lock) {
 	struct semaphore_elem waiter;
@@ -295,8 +300,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_sort(&cond->waiters, cmp_sem_priority, NULL);
-	list_push_back (&cond->waiters, &waiter.elem);
+	// PSS - condition variable의 waiters list에 우선순위 순서로 삽입되도록 수정
+	list_insert_ordered (&cond->waiters, &waiter.elem, cmp_sema_elem_priority, NULL);
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -318,9 +323,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters))
-		list_sort(&cond->waiters, cmp_sem_priority, NULL);
+	{
+		list_sort(&cond->waiters, cmp_sema_elem_priority, NULL); // PSS - condition variable의waiterslist를우선순위로재정렬
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -338,15 +345,37 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 		cond_signal (cond, lock);
 }
 
+bool 
+cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+    return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
+}
+
 /** 첫번째 인자로 주어진 세마포어를 위해 대기중인 가장 높은 우선순위의 스레드와, 
  * 두번째 인자로 주어진 세마포어를 위해 대기중인 가장높은 우선순위의 스레드와 비교하여,
  * a스레드의 우선순위가 더 높으면 1, otherwise 0*/
 bool
-cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
-	// semaphore_elem으로부터 각 semaphore_elem의 쓰레드 디스크립터를 획득. -> thread discriptor 라는게 뭐지
-	struct semaphore_elem *se_a = list_entry(a, struct thread, elem);
-	struct semaphore_elem *se_b = list_entry(b, struct thread, elem);
+cmp_sema_elem_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
+	struct semaphore_elem *semaElem_a = list_entry(a, struct thread, elem);
+	struct semaphore_elem *semaElem_b = list_entry(b, struct thread, elem);
+
+	struct semaphore sema_a = semaElem_a->semaphore;
+	struct semaphore sema_b = semaElem_b->semaphore;
+
+	struct list *waiters_a = &sema_a.waiters;
+	struct list *waiters_b = &sema_b.waiters;
+
+	if(list_empty(waiters_a) == true)
+		return false;
 	
+	if(list_empty(waiters_b) == true)
+		return true;
+	
+	struct thread* t_a = list_begin(waiters_a);
+	struct thread* t_b = list_begin(waiters_b);
+	
+	return t_a->priority > t_b->priority;
+
+	/** the first
 	struct semaphore sema_a = se_a->semaphore;
 	struct semaphore sema_b = se_b->semaphore;
 	
@@ -355,7 +384,22 @@ cmp_sem_priority (const struct list_elem *a, const struct list_elem *b, void *au
 	
 	struct thread* t_a = list_begin(waiters_a);
 	struct thread* t_b = list_begin(waiters_b);
-
-	return t_a->priority > t_b->priority;
+	*/
 	
+	/** the second
+	int64_t a_pri = list_entry(list_begin(&sema_a->semaphore), struct thread, elem)->priority;
+	int64_t b_pri = list_entry(list_begin(&sema_b->semaphore), struct thread, elem)->priority;
+	return a_pri > b_pri;
+	*/
+
+
+
+	// if (!(list_empty(&sema_a->semaphore.waiters)&&
+	// 	!(list_empty(&sema_b->semaphore.waiters)))) {
+	// 	return list_entry(list_begin(&sema_a->semaphore.waiters), struct thread, elem)->priority
+	//      	 > list_entry(list_begin(&sema_b->semaphore.waiters), struct thread, elem)->priority;
+	// }
+	// return 0;
+	
+
 }

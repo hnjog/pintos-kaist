@@ -2,6 +2,7 @@
     "files.associations": {
         "list.h": "c",
         "process.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "synch.h": "c"
     }
 }
