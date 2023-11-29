@@ -61,7 +61,7 @@ static void kernel_thread (thread_func *, void *aux);
 
 static void idle (void *aux UNUSED);
 static struct thread *next_thread_to_run (void);
-static void init_thread (struct thread *, const char *name, int priority);
+static void init_thread (struct thread *, const char *name, int priority); 
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
@@ -333,14 +333,19 @@ thread_yield (void) {
 
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
-/* 현재 쓰레드의 우선순위를 인자로 받는 새로운 우선순위로 바꾸고 현재 쓰레드의 우선순위와 ready_list에서 가장 높은 우선순위를 비교하여 스케쥴링하는 함수호출 */
+/* PSS - 현재 쓰레드의 우선순위를 인자로 받는 새로운 우선순위로 바꾸고 현재 쓰레드의 우선순위와 ready_list에서 가장 높은 우선순위를 비교하여 스케쥴링하는 함수호출 */
+/* Donation */
 void
 thread_set_priority (int new_priority) {
 	struct thread *curr = thread_current();
 	curr->priority = new_priority; // Set priority of the current thread.
-
-	if (!list_empty(&ready_list))
-		test_max_priority();
+	/* 
+	for the case 현재 thread가 lock, donation과 관계없이 thread_set_priority 함수를 호출함으로 자신의 priority가 변경되는 경우
+	also, for the case when donor list에 있는 스레드들보다 priority 가 높아지는 상황,  
+	priority need to make sure that 새로 바뀐 priority, not the highest priority of donorlist*/
+	goback_priority();
+	donate_priority();
+	test_max_priority(); 
 }
 
 /* Returns the current thread's priority. */
@@ -438,6 +443,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	
+	/* priority donation */
+	t->initial_pri = priority;
+	t->lock_im_waiting = NULL;
+	list_init (&t->donor_list); 
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

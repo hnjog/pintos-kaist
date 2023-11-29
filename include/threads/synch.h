@@ -53,4 +53,10 @@ bool cmp_sema_elem_priority (const struct list_elem *a,
 					   const struct list_elem *b,
 					   void *aux);
 
+/* Donation */
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+void donate_priority(void);
+void remove_donor(struct lock *lock);
+void goback_priority (void);
+
 #endif /* threads/synch.h */

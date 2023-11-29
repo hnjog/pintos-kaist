@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -92,9 +93,13 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	int64_t wakeup;  					/* for the local tick */
-	/* DONATION */
-	int initial_pri;					/* 초기 우선순위 값을 저장할 필드 */
 	
+	/* priority donation */
+	int initial_pri;					/* 초기 우선순위 값을 저장할 필드 */
+	struct lock *lock_im_waiting;	    /* 해당 스레드가 대기하고 있는 lock 자료구조의 주소를 저장할 필드 */
+	struct list donor_list;				/* 기부 해주신 스레드의 목록 */
+	struct list_elem donor_list_elem;   /* donor_list를 관리하기 위한 element 로 thread 구조체의 그냥 elem 과 구분하여 사용하도록 한다. */
+						
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */

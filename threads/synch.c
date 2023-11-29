@@ -71,7 +71,6 @@ sema_down (struct semaphore *sema) {
 		thread_block ();
 	}
 	sema->value--;
-	// test_max_priority();
 	intr_set_level (old_level);
 }
 
@@ -191,14 +190,24 @@ lock_init (struct lock *lock) {
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+   /* lock을 점유하고 있는 스레드와 요청하는 스레드의 우선순위를 비교하여 priority donation을 수행하도록 수정*/
 void
 lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
-	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	struct thread *curr = thread_current();
+	if (lock->holder != NULL) { 		// 이미 홀더가 있다면
+		curr->lock_im_waiting = lock;   // 내가 기다리고 있는 락에 등록
+		// lock holder의 donors list에 현재 스레드 추가
+		list_insert_ordered (&lock->holder->donor_list, &curr->donor_list_elem, cmp_donation_priority, NULL);
+		donate_priority (); 			// 기부! 
+	}
+	
+	sema_down (&lock->semaphore);		// lock 점유!!
+	curr->lock_im_waiting = NULL;		// 점유 했으니 풀기
+	lock->holder = thread_current ();	// 이제 이 락은 현재 스레드의 것입니다
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -230,6 +239,9 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+
+	remove_donor(lock);				 // 기부자 목록에서 반환될 락을 요청했던 스레드 제거
+	goback_priority();				 // 현재 스레드가 donee이고 락을 반환할 때, 기부 이전 priority로 복귀
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
@@ -346,7 +358,7 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 }
 
 bool 
-cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux) {
+cmp_sema_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
     return list_entry(a, struct thread, elem)->priority > list_entry(b, struct thread, elem)->priority;
 }
 
@@ -391,15 +403,57 @@ cmp_sema_elem_priority (const struct list_elem *a, const struct list_elem *b, vo
 	int64_t b_pri = list_entry(list_begin(&sema_b->semaphore), struct thread, elem)->priority;
 	return a_pri > b_pri;
 	*/
+}
+
+bool
+cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+	struct thread *t_a = list_entry(a, struct thread, donor_list_elem);
+	struct thread *t_b = list_entry(a, struct thread, donor_list_elem);
+	return t_a->priority > t_b->priority;
+}
 
 
+/* 현재 스레드가 자신이 필요한 lock 을 점유하고 있는 스레드에게 priority를 상속하는 함수 */
+void
+donate_priority(void) {
+    struct thread *curr = thread_current(); // 검사중인 스레드
+    struct thread *holder;					// curr이 원하는 락을 가진드스레드
 
-	// if (!(list_empty(&sema_a->semaphore.waiters)&&
-	// 	!(list_empty(&sema_b->semaphore.waiters)))) {
-	// 	return list_entry(list_begin(&sema_a->semaphore.waiters), struct thread, elem)->priority
-	//      	 > list_entry(list_begin(&sema_b->semaphore.waiters), struct thread, elem)->priority;
-	// }
-	// return 0;
-	
+    int priority = curr->priority;
 
+    for (int i = 0; i < 8; i++) {            // Nested donation 의 최대 깊이는 8
+        if (curr->lock_im_waiting == NULL)   // if there is no more nested one
+            return;
+        holder = curr->lock_im_waiting->holder;
+        holder->priority = priority;
+        curr = holder;
+    }
+}
+
+/* 기부자 목록에서 반환될 락을 요청했던 스레드 엔트리 제거 */
+void 
+remove_donor(struct lock *lock) {
+    struct list_elem *e;
+  	struct thread *curr = thread_current ();
+
+  	for (e = list_begin (&curr->donor_list); e != list_end (&curr->donor_list); e = list_next (e)){
+    	struct thread *t = list_entry (e, struct thread, donor_list_elem);
+		if (t->lock_im_waiting == lock) {
+			list_remove (&t->donor_list_elem);
+		}
+	}
+}
+
+void
+goback_priority (void) {
+    struct thread *curr = thread_current ();
+    curr->priority = curr->initial_pri;
+
+    if (!list_empty (&curr->donor_list)) {  // 기부 받은 priority가 남아있다면
+		list_sort (&curr->donor_list, cmp_donation_priority, 0);
+
+    	struct thread *front = list_entry (list_front (&curr->donor_list), struct thread, donor_list_elem);
+		if (front->priority > curr->priority)
+			curr->priority = front->priority; // 가장 높은  priority를 현재 thread의 priority로 설정 
+    }
 }
