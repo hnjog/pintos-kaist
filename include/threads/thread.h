@@ -115,9 +115,12 @@ struct thread {
 	//  multiple donation을 고려한 리스트
 	//  해당 리스트를 고려한 elem도 필요
 	int initPriority;
-	struct lock* lpWaitLock;
+	struct lock* waitingLock;
 	struct list waitList; 		// multiple donation에서 내 lock이 풀리기를 기다리는 thread 들
 	struct list_elem waitElem;
+
+	int nice;
+	int fp_recent_cpu;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -171,5 +174,14 @@ void compare_Curr_ReadyList();
 void donate_priority(void);
 void remove_with_lock(struct lock* _lock);
 void refresh_priority(void);
+
+// advanced Schedular
+void calc_priority(struct thread* t);
+void calc_recent_cpu(struct thread* t);
+void calc_load_avg(void);
+void recent_cpu_incre(void);
+
+// all thread recent_cpu prority re_calculate
+void atrp_recalc(void);
 
 #endif /* threads/thread.h */

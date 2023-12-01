@@ -213,9 +213,10 @@ lock_acquire (struct lock *lock) {
 	// donate_priority 호출
 	// lock 획득 후, lock의 holder를 갱신
 
-	if(lock->holder != NULL)
+	if(thread_mlfqs == false &&
+		lock->holder != NULL)
 	{
-		thread_current()->lpWaitLock = lock;
+		thread_current()->waitingLock = lock;
 
 		list_insert_ordered(&lock->holder->waitList, &thread_current()->waitElem, cmp_priority, NULL);
 
@@ -257,9 +258,11 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	remove_with_lock(lock);
-	
-	refresh_priority();
+	if(thread_mlfqs == false)
+	{
+		remove_with_lock(lock);
+		refresh_priority();
+	}
 	
 	lock->holder = NULL;
 	

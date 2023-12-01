@@ -130,6 +130,22 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 
+	if(thread_mlfqs == true)
+	{
+		recent_cpu_incre(); // recent_cpu 1 증가
+
+		if(timer_ticks() % TIMER_FREQ == 0) // 1초 경과
+		{
+			calc_load_avg();
+			atrp_recalc();
+		}
+		else if(timer_ticks() % 4 == 0) // 매 4틱마다
+		{
+			calc_priority(thread_current());
+		}
+
+	}
+
 	if(ticks >= get_next_tick_to_awake())
 	{
 		thread_awake(ticks);
