@@ -45,18 +45,13 @@ void cond_broadcast (struct condition *, struct lock *);
  * reference guide for more information.*/
 #define barrier() asm volatile ("" : : : "memory")
 
-
-bool cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
-/** 첫번째 인자로 주어진 세마포어를 위해 대기중인 가장 높은 우선순위의 스레드와, 
- * 두번째 인자로 주어진 세마포어를 위해 대기중인 가장높은 우선순위의 스레드와 비교*/
-bool cmp_sema_elem_priority (const struct list_elem *a,
-					   const struct list_elem *b,
-					   void *aux);
+bool cmp_sema_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+bool cmp_sema_elem_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 /* Donation */
-bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
-void donate_priority(void);
-void remove_donor(struct lock *lock);
-void goback_priority (void);
+bool cmp_donation_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
+void donate_priority (void);
+void remove_donor (struct lock *lock);
+void refresh_priority (void);
 
 #endif /* threads/synch.h */

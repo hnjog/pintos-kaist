@@ -65,11 +65,8 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
-// void thread_sleep(int64_t ticks);
-// void thread_awake(int64_t ticks);
 static bool value_less (const struct list_elem *, const struct list_elem *,
                         void *);
-
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -121,8 +118,7 @@ thread_init (void) {
 	
 	/* project1 */
 	list_init (&sleep_list);
-	/* sleeplist에서 가장 먼저 깨울 쓰레드 시간 지정용 변수
-	sleep할 때마다 비교 후 작은 값으로 변경할 것 */
+	/* sleeplist에서 가장 먼저 깨울 쓰레드 시간 지정용 전역 변수. sleep할 때마다 비교 후 작은 값으로 변경할 것 */
 	global_next_ticks_to_awake = INT64_MAX;
 	
 
@@ -331,20 +327,12 @@ thread_yield (void) {
 	intr_set_level (old_level);
 }
 
-
-/* Sets the current thread's priority to NEW_PRIORITY. */
-/* PSS - 현재 쓰레드의 우선순위를 인자로 받는 새로운 우선순위로 바꾸고 현재 쓰레드의 우선순위와 ready_list에서 가장 높은 우선순위를 비교하여 스케쥴링하는 함수호출 */
-/* Donation */
+/* setting the pri_before_dona to the new_priority */
 void
 thread_set_priority (int new_priority) {
 	struct thread *curr = thread_current();
-	curr->priority = new_priority; // Set priority of the current thread.
-	/* 
-	for the case 현재 thread가 lock, donation과 관계없이 thread_set_priority 함수를 호출함으로 자신의 priority가 변경되는 경우
-	also, for the case when donor list에 있는 스레드들보다 priority 가 높아지는 상황,  
-	priority need to make sure that 새로 바뀐 priority, not the highest priority of donorlist*/
-	goback_priority();
-	donate_priority();
+	curr->pri_before_dona = new_priority;
+	refresh_priority();
 	test_max_priority(); 
 }
 
@@ -445,7 +433,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 	
 	/* priority donation */
-	t->initial_pri = priority;
+	t->pri_before_dona = priority;
 	t->lock_im_waiting = NULL;
 	list_init (&t->donor_list); 
 }
@@ -568,7 +556,7 @@ thread_launch (struct thread *th) {
  * It's not safe to call printf() in the schedule(). */
 /* 상태값을 변경하고 스케줄을 호출 */
 static void
-do_schedule(int status) {
+do_schedule (int status) {
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (thread_current()->status == THREAD_RUNNING);
 	while (!list_empty (&destruction_req)) {
@@ -649,7 +637,7 @@ thread_sleep (int64_t ticks) {
 	if (curr != idle_thread)
 		list_push_back (&sleep_list, &(curr->elem));
 
-	thread_block(); // 순서 바꾸니까 무한루프는 빠져나감
+	thread_block (); // 순서 바꾸니까 무한루프는 빠져나감
 
 	intr_set_level (old_level);
 	
@@ -682,20 +670,20 @@ thread_awake (int64_t ticks) {
 	}
 }
 
-int64_t get_next_tick_to_awake(void) {
+int64_t get_next_tick_to_awake (void) {
 	return global_next_ticks_to_awake;
 }
 
 /* 현재 수행중인 스레드와 가장높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링*/
 void
-test_max_priority(void) {
+test_max_priority (void) {
 	struct thread *curr = thread_current();
 	
 	if (!list_empty(&ready_list)) {
-		// list_begin(&ready_list); list_begin 이 list elem인데 이렇게 하는 것보다 list_entry(list_begin())
-		struct list_elem *top_t = list_begin(&ready_list);
-		/*  */
-		if (cmp_priority(top_t, &thread_current()->elem, NULL))
+		
+		struct list_elem *top_elem = list_begin(&ready_list);
+		
+		if (cmp_priority(top_elem, &thread_current()->elem, NULL))
 			thread_yield();
 	}
 	

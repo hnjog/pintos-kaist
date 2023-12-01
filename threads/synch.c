@@ -241,7 +241,7 @@ lock_release (struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	remove_donor(lock);				 // 기부자 목록에서 반환될 락을 요청했던 스레드 제거
-	goback_priority();				 // 현재 스레드가 donee이고 락을 반환할 때, 기부 이전 priority로 복귀
+	refresh_priority();				 // 현재 스레드가 donee이고 락을 반환할 때, 기부 이전 priority로 복귀
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
@@ -367,11 +367,11 @@ cmp_sema_priority (const struct list_elem *a, const struct list_elem *b, void *a
  * a스레드의 우선순위가 더 높으면 1, otherwise 0*/
 bool
 cmp_sema_elem_priority (const struct list_elem *a, const struct list_elem *b, void *aux) {
-	struct semaphore_elem *semaElem_a = list_entry(a, struct semaphore_elem, elem);
-	struct semaphore_elem *semaElem_b = list_entry(b, struct semaphore_elem, elem);
+	struct semaphore_elem *sema_elem_a = list_entry(a, struct semaphore_elem, elem);
+	struct semaphore_elem *sema_elem_b = list_entry(b, struct semaphore_elem, elem);
 
-	struct semaphore sema_a = semaElem_a->semaphore;
-	struct semaphore sema_b = semaElem_b->semaphore;
+	struct semaphore sema_a = sema_elem_a->semaphore;
+	struct semaphore sema_b = sema_elem_b->semaphore;
 
 	struct list *waiters_a = &sema_a.waiters;
 	struct list *waiters_b = &sema_b.waiters;
@@ -444,10 +444,11 @@ remove_donor(struct lock *lock) {
 	}
 }
 
+// Donate 받은 priority 와 current priority를 비교해서 donate받은게 더 크다면 current을 update
 void
-goback_priority (void) {
+refresh_priority (void) {
     struct thread *curr = thread_current ();
-    curr->priority = curr->initial_pri;
+	curr->priority = curr->pri_before_dona;
 
     if (!list_empty (&curr->donor_list)) {  // 기부 받은 priority가 남아있다면
 		list_sort (&curr->donor_list, cmp_donation_priority, 0);

@@ -95,7 +95,7 @@ struct thread {
 	int64_t wakeup;  					/* for the local tick */
 	
 	/* priority donation */
-	int initial_pri;					/* 초기 우선순위 값을 저장할 필드 */
+	int pri_before_dona;				/* 기부 받기 전 priority */
 	struct lock *lock_im_waiting;	    /* 해당 스레드가 대기하고 있는 lock 자료구조의 주소를 저장할 필드 */
 	struct list donor_list;				/* 기부 해주신 스레드의 목록 */
 	struct list_elem donor_list_elem;   /* donor_list를 관리하기 위한 element 로 thread 구조체의 그냥 elem 과 구분하여 사용하도록 한다. */
