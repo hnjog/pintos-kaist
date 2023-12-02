@@ -196,13 +196,15 @@ lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
-
 	struct thread *curr = thread_current();
-	if (lock->holder != NULL) { 		// 이미 홀더가 있다면
+
+	/* mlfqs스케줄러활성화시priority donation 관련코드비활성화*/
+	if (lock->holder != NULL) { 
 		curr->lock_im_waiting = lock;   // 내가 기다리고 있는 락에 등록
 		// lock holder의 donors list에 현재 스레드 추가
 		list_insert_ordered (&lock->holder->donor_list, &curr->donor_list_elem, cmp_donation_priority, NULL);
-		donate_priority (); 			// 기부! 
+		if (thread_mlfqs == false)
+			donate_priority (); 			// 기부! 
 	}
 	
 	sema_down (&lock->semaphore);		// lock 점유!!
@@ -240,8 +242,11 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	remove_donor(lock);				 // 기부자 목록에서 반환될 락을 요청했던 스레드 제거
-	refresh_priority();				 // 현재 스레드가 donee이고 락을 반환할 때, 기부 이전 priority로 복귀
+	/* mlfqs스케줄러활성화시priority donation 관련코드비활성화*/
+	if (thread_mlfqs == false) {
+		remove_donor(lock);				 // 기부자 목록에서 반환될 락을 요청했던 스레드 제거
+		refresh_priority();				 // 현재 스레드가 donee이고 락을 반환할 때, 기부 이전 priority로 복귀
+	}
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);

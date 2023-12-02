@@ -29,6 +29,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -99,10 +100,16 @@ struct thread {
 	struct lock *lock_im_waiting;	    /* 해당 스레드가 대기하고 있는 lock 자료구조의 주소를 저장할 필드 */
 	struct list donor_list;				/* 기부 해주신 스레드의 목록 */
 	struct list_elem donor_list_elem;   /* donor_list를 관리하기 위한 element 로 thread 구조체의 그냥 elem 과 구분하여 사용하도록 한다. */
+	
+	/* 4BSD */
+	int nice;
+	int recent_cpu;						/* 최근에 얼마나 많은 CPU를 사용했는가를 표현 */
 						
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	struct list_elem allElem;
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -117,6 +124,8 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
+static struct list ready_list;
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -164,5 +173,12 @@ bool cmp_priority (const struct list_elem *a, /* 인자로 주어진 스레드�
 				   const struct list_elem *b,
 				   void *aux UNUSED);
 
+void mlfqs_priority (struct thread *t);
+void mlfqs_recent_cpu (struct thread *t);
+void mlfqs_load_avg (void);
+void mlfqs_increment (void);
+void mlfqs_recalc (void);
+void mlfqs_recalc_recent_cpu (void);
+void mlfqs_recalc_priority (void);
 
 #endif /* threads/thread.h */
