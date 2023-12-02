@@ -486,26 +486,31 @@ int thread_get_priority(void)
 /* Sets the current thread's nice value to NICE. */
 void thread_set_nice(int nice)
 {
-	enum intr_level old_level = intr_disable ();
 	// nice 값 구하고,
 	// priority 재계산
 	struct thread* curr = thread_current();
+	
+	// nice 값 제한
+	const int Max_Nice = 20;
+	const int Min_Nice = -20;
+
+	if(nice < Min_Nice)
+		nice = Min_Nice;
+	else if(nice > Max_Nice)
+		nice = Max_Nice;
+
 	curr->nice = nice;
 	calc_priority(curr);
 
 	compare_Curr_ReadyList();
-
-	intr_set_level (old_level);
 }
 
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
-	enum intr_level old_level = intr_disable ();
 	struct thread* curr = thread_current();
 	int nice = curr->nice;
 
-	intr_set_level (old_level);
 	return nice;
 }
 
