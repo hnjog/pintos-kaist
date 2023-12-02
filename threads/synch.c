@@ -241,14 +241,14 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
-
+	lock->holder = NULL;
 	/* mlfqs스케줄러활성화시priority donation 관련코드비활성화*/
 	if (thread_mlfqs == false) {
 		remove_donor(lock);				 // 기부자 목록에서 반환될 락을 요청했던 스레드 제거
 		refresh_priority();				 // 현재 스레드가 donee이고 락을 반환할 때, 기부 이전 priority로 복귀
 	}
 
-	lock->holder = NULL;
+
 	sema_up (&lock->semaphore);
 }
 

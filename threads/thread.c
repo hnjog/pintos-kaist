@@ -138,7 +138,7 @@ thread_init (void) {
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread();
 	init_thread(initial_thread, "main", PRI_DEFAULT);
-	list_push_back(&all_list, &(initial_thread->allElem));//metametamong
+	list_push_back(&all_list, &(initial_thread->allElem));
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid();
 	
@@ -231,7 +231,7 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	list_push_back(&all_list,&t->allElem);//메타메타몽
+	list_push_back(&all_list, &t->allElem);//메타메타몽
 	/* Add to run queue. */
 	thread_unblock(t);
 	
@@ -321,6 +321,7 @@ thread_exit (void) {
 
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
+	list_remove(&thread_current()->allElem);
 	intr_disable();
 	do_schedule(THREAD_DYING);
 	NOT_REACHED();
@@ -731,11 +732,16 @@ int64_t get_next_tick_to_awake (void) {
 /* 현재 수행중인 스레드와 가장높은 우선순위의 스레드의 우선순위를 비교하여 스케줄링*/
 void
 test_max_priority (void) {
-	if (!list_empty(&ready_list)) return;
-		
-	struct thread *t = list_entry(list_begin(&ready_list), struct thread, elem);
-			
-	if (thread_get_priority() < t -> priority) thread_yield();
+	struct thread *curr = thread_current();
+    
+    if (!list_empty(&ready_list)) {
+        
+        struct list_elem *top_elem = list_begin(&ready_list);
+        
+        if (cmp_priority(top_elem, &thread_current()->elem, NULL))
+            thread_yield();
+    }
+
 	
 }
 
@@ -753,7 +759,7 @@ mlfqs_priority (struct thread *t) {
 	if (t != idle_thread) {
 		// priority = PRI_MAX –(recent_cpu/ 4) –(nice * 2)
 		int rec_dvb_4 = div_mixed (t->recent_cpu, 4);
-		int nice_double = 2*t->nice;//metametmaong
+		int nice_double = 2*t->nice;
 		int sum_4_sub = add_mixed (rec_dvb_4, nice_double);
 		int reversed_sign = sub_mixed (sum_4_sub, (int)PRI_MAX);
 		int pri_result = fp_to_int(sub_fp(0, reversed_sign));
@@ -768,7 +774,7 @@ mlfqs_priority (struct thread *t) {
 /* 인자 주어진 스레드의 recent_cpu를 업데이트*/
 void
 mlfqs_recent_cpu (struct thread *t) {
-	if(t==idle_thread) return; //metametamong
+	if (t==idle_thread) return;
 	// recent_cpu=(2 * load_avg) / (2 * load_avg+ 1) * recent_cpu+ nice
 	int load_avg_double = mult_mixed (load_avg, 2);
 	int lad_plus_1 = add_mixed (load_avg_double, 1);
@@ -791,18 +797,19 @@ mlfqs_load_avg (void) {
     int ready_thread = (int)list_size (&ready_list);
     ready_thread = (thread_current() == idle_thread) ? ready_thread : ready_thread + 1;
     int ready_thread2 = mult_mixed (div_1_60, ready_thread);
-    load_avg= add_fp (load_avg2, ready_thread2);//metametamong
-    // load_avg = result;
+    load_avg= add_fp (load_avg2, ready_thread2);
 }
 
 /* 현재 수행중인 스레드의 recent_cpu를 1증가시킴 */
 void
 mlfqs_increment (void) {
-	struct thread *t = thread_current ();
-	if (t != idle_thread) {
-		int cur_recent_cpu = thread_current()->recent_cpu;
-        thread_current()->recent_cpu = add_mixed(cur_recent_cpu, 1);
-	}
+	// struct thread *t = thread_current ();
+	// if (t != idle_thread) {
+	// 	int cur_recent_cpu = thread_current()->recent_cpu;
+    //     thread_current()->recent_cpu = add_mixed(cur_recent_cpu, 1);
+	// }
+	if(thread_current()==idle_thread)return;
+	thread_current()->recent_cpu=add_mixed(thread_current()->recent_cpu,1);
 }
 
 void mlfqs_recalc_recent_cpu (void) {
