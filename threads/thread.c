@@ -517,26 +517,20 @@ int thread_get_nice(void)
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-	enum intr_level old_level = intr_disable ();
-
 	int real_load_avg = mult_mixed(fp_load_avg,100);
 
 	int integ_load_avg = fp_to_int_round(real_load_avg);
-	intr_set_level (old_level);
 	return integ_load_avg;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-	enum intr_level old_level = intr_disable ();
-
 	struct thread* curr = thread_current();
 
 	int real_curr_recent_cpu = mult_mixed(curr->fp_recent_cpu,100);
 
 	int integ_curr_recent_cpu = fp_to_int_round(real_curr_recent_cpu);
-	intr_set_level (old_level);
 	return integ_curr_recent_cpu;
 }
 
