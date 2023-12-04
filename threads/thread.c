@@ -41,6 +41,8 @@ static struct list ready_list;
 // 자는 리스트
 static struct list sleep_list;
 
+static struct list all_list;
+
 /* Idle thread. */
 // idle 스레드는 맨 처음 시작된 스레드 하나만 말한다
 static struct thread *idle_thread;
@@ -123,6 +125,7 @@ void thread_init(void)
 	lock_init(&tid_lock);
 	list_init(&ready_list);
 	list_init(&sleep_list);
+	list_init(&all_list);
 	list_init(&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -457,7 +460,7 @@ void thread_yield(void)
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void thread_set_priority(int new_priority)
 {
-	if(thread_mlfqs == true)
+	if (thread_mlfqs == true)
 		return;
 
 	thread_current()->initPriority = new_priority;
@@ -488,15 +491,15 @@ void thread_set_nice(int nice)
 {
 	// nice 값 구하고,
 	// priority 재계산
-	struct thread* curr = thread_current();
-	
+	struct thread *curr = thread_current();
+
 	// nice 값 제한
 	const int Max_Nice = 20;
 	const int Min_Nice = -20;
 
-	if(nice < Min_Nice)
+	if (nice < Min_Nice)
 		nice = Min_Nice;
-	else if(nice > Max_Nice)
+	else if (nice > Max_Nice)
 		nice = Max_Nice;
 
 	curr->nice = nice;
@@ -508,7 +511,7 @@ void thread_set_nice(int nice)
 /* Returns the current thread's nice value. */
 int thread_get_nice(void)
 {
-	struct thread* curr = thread_current();
+	struct thread *curr = thread_current();
 	int nice = curr->nice;
 
 	return nice;
@@ -517,7 +520,7 @@ int thread_get_nice(void)
 /* Returns 100 times the system load average. */
 int thread_get_load_avg(void)
 {
-	int real_load_avg = mult_mixed(fp_load_avg,100);
+	int real_load_avg = mult_mixed(fp_load_avg, 100);
 
 	int integ_load_avg = fp_to_int_round(real_load_avg);
 	return integ_load_avg;
@@ -526,9 +529,9 @@ int thread_get_load_avg(void)
 /* Returns 100 times the current thread's recent_cpu value. */
 int thread_get_recent_cpu(void)
 {
-	struct thread* curr = thread_current();
+	struct thread *curr = thread_current();
 
-	int real_curr_recent_cpu = mult_mixed(curr->fp_recent_cpu,100);
+	int real_curr_recent_cpu = mult_mixed(curr->fp_recent_cpu, 100);
 
 	int integ_curr_recent_cpu = fp_to_int_round(real_curr_recent_cpu);
 	return integ_curr_recent_cpu;
@@ -606,6 +609,8 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	t->nice = NICE_DEFAULT;
 	t->fp_recent_cpu = RECENT_CPU_DEFAULT;
+
+	list_push_back(&all_list,&t->allElem);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -739,6 +744,7 @@ do_schedule(int status)
 	{
 		struct thread *victim =
 			list_entry(list_pop_front(&destruction_req), struct thread, elem);
+		list_remove(&victim->allElem);
 		palloc_free_page(victim);
 	}
 	thread_current()->status = status;
@@ -936,34 +942,34 @@ void refresh_priority(void)
 
 void calc_priority(struct thread *t)
 {
-	if(t == idle_thread)
+	if (t == idle_thread)
 		return;
 
 	// priority = PRI_MAX - (recent_cpu / 4) - nice * 2
 	// 다만 recent_cpu 가 실수이기에
 	// fixed_point 내부의 함수를 이용하여 구한 후,
 	// 정상적인 int 값으로 바꾸어줌 (일단 반올림)
-	int real_recent_div_4 = div_mixed(t->fp_recent_cpu,4);
+	int real_recent_div_4 = div_mixed(t->fp_recent_cpu, 4);
 
-	t->priority = PRI_MAX -  fp_to_int_round(real_recent_div_4) - t->nice * 2;
+	t->priority = PRI_MAX - fp_to_int_round(real_recent_div_4) - t->nice * 2;
 }
 
 void calc_recent_cpu(struct thread *t)
 {
-	if(t == idle_thread)
+	if (t == idle_thread)
 		return;
-	
+
 	// recent_cpu = decay * recent_cpu + nice
 	// decay : 감쇠값
-	int real_mult2_Fp = mult_mixed(fp_load_avg,2);
-	int real_decay = div_fp(real_mult2_Fp,add_mixed(real_mult2_Fp,1));
-	t->fp_recent_cpu = add_mixed(mult_fp(real_decay,t->fp_recent_cpu),t->nice);
+	int real_mult2_Fp = mult_mixed(fp_load_avg, 2);
+	int real_decay = div_fp(real_mult2_Fp, add_mixed(real_mult2_Fp, 1));
+	t->fp_recent_cpu = add_mixed(mult_fp(real_decay, t->fp_recent_cpu), t->nice);
 }
 
 void calc_load_avg(void)
 {
 	// load_average = (59/60) * load_average + (1/60) * ready_threads
-	// load_average : 최근 1분 동안 수행 가능한 프로세스의 평균 
+	// load_average : 최근 1분 동안 수행 가능한 프로세스의 평균
 	// ready_threads : ready_list의 스레드들과 실행 중인 스레드의 개수
 	// (idle 제외)
 	// load_avg 는 실수이다
@@ -978,59 +984,49 @@ void calc_load_avg(void)
 	// a 값이 큰 경우, 현재 시점의 데이터를 더욱 반영하게 된다
 	// 위 예시에서 a는 1/60 을 말한다
 
-	int fp_oneMSParam = div_fp(59,60); // 1 - smooth parameter 이므로 one minus smooth param을 의미
-	int fp_smoothParam = div_fp(1,60); // smooth parameter를 뜻함
+	int fp_oneMSParam = div_fp(59, 60); // 1 - smooth parameter 이므로 one minus smooth param을 의미
+	int fp_smoothParam = div_fp(1, 60); // smooth parameter를 뜻함
 
 	// 현재 실행중인 스레드
 	int ready_thread = 1;
-	if(thread_current() == idle_thread) // 다만 그게 idle인 경우 다시 0으로
+	if (thread_current() == idle_thread) // 다만 그게 idle인 경우 다시 0으로
 		ready_thread--;
 
 	ready_thread += list_size(&ready_list);
 
-	fp_load_avg = add_fp(mult_fp(fp_oneMSParam,fp_load_avg),mult_mixed(fp_smoothParam,ready_thread));
+	fp_load_avg = add_fp(mult_fp(fp_oneMSParam, fp_load_avg), mult_mixed(fp_smoothParam, ready_thread));
 
-	if(fp_load_avg < 0)
+	if (fp_load_avg < 0)
 		fp_load_avg = 0;
 }
 
 void recent_cpu_incre(void)
 {
 	// tick 마다 호출되어 recent_cpu를 1 증가 시킨다
-	struct thread* curr = thread_current();
+	struct thread *curr = thread_current();
 
-	if(curr == idle_thread)
+	if (curr == idle_thread)
 		return;
-	
-	curr->fp_recent_cpu = add_mixed(curr->fp_recent_cpu,1);
+
+	curr->fp_recent_cpu = add_mixed(curr->fp_recent_cpu, 1);
 }
 
 void atrp_recalc(void)
 {
 	// 모든 thread의 recent_cpu와 priority를 재 계산한다
-	struct thread* tempT = thread_current();
-	struct list_elem* tempElem = list_head(&ready_list);
-	struct list_elem* tail_Elem = list_tail(&ready_list);
+	if(list_empty(&all_list) == true)
+		return;
 
-	// 현재 cpu, ready_list, sleep_list 를 순회하며 재계산한다
-
-	do
-	{
-		calc_recent_cpu(tempT);
-		calc_priority(tempT);
-		tempElem = tempElem->next;
-		tempT = list_entry(tempElem, struct thread, elem);
-	} while (tempElem != tail_Elem);
-
-	tempElem = list_head(&sleep_list);
-	tail_Elem = list_tail(&sleep_list);
+	struct list_elem *tempElem = list_begin(&all_list);
+	struct list_elem *tail_Elem = list_tail(&all_list);
+	struct thread *tempT;
 
 	while (tempElem != tail_Elem)
 	{
-		tempT = list_entry(tempElem, struct thread, elem);
+		tempT = list_entry(tempElem, struct thread, allElem);
 		calc_recent_cpu(tempT);
 		calc_priority(tempT);
+
 		tempElem = tempElem->next;
 	}
-
 }

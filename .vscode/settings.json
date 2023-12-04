@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "fixed_point.h": "c",
-        "stdint.h": "c"
+        "stdint.h": "c",
+        "init.h": "c"
     }
 }
