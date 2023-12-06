@@ -825,6 +825,9 @@ bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *au
 
 void compare_Curr_ReadyList()
 {
+	if(intr_context() == true)
+		return;
+
 	if (list_empty(&ready_list))
 		return;
 	// ready_list는 내림차순으로 이기에 (집어넣을때, sorted로 집어넣으므로)

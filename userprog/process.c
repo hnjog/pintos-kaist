@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "lib/string.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -204,6 +205,8 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	for(;;);
+
 	return -1;
 }
 
@@ -329,6 +332,16 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
+	size_t nameSize = strlen(file_name);
+	char* tokenStr = NULL;
+	char* savePtr = NULL;
+	char* tokenArr[128] = {0,};
+	char copy_fn[256] = {0,};
+	memcpy(copy_fn,file_name,nameSize);
+	copy_fn[nameSize] = '\0';
+
+	tokenStr = strtok_r(copy_fn," ",&savePtr);
+
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -336,7 +349,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (tokenStr); // file_name
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -408,14 +421,59 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
+	// 여기서 rsp 세팅(스택 top 포인터)
 	if (!setup_stack (if_))
 		goto done;
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	
+	size_t argc = 0;
+
+
+	while (tokenStr != NULL)
+	{
+		tokenArr[argc] = tokenStr;
+		argc++;
+		tokenStr = strtok_r(NULL," ",&savePtr);
+	}
+
+
+	// rsp 위치에 문자열 데이터 쓰기
+	for (i = argc - 1; i >= 0; i--)
+	{
+		nameSize = strlen(tokenArr[i]);
+		if_->rsp -= nameSize; // 빼준다
+		memcpy((void*)(if_->rsp), tokenArr[i], nameSize);
+	}
+
+	// align 해주기
+	size_t alignValue = (if_->rsp % 8);
+	if(alignValue != 0)
+	{
+		if_->rsp -= alignValue;
+		memset((void*)(if_->rsp), NULL, alignValue);
+	}
+
+	// argv에 초과되지 않도록 null 한번 넣어주기
+	size_t chPtrSize = sizeof(char *);
+	if_->rsp -= chPtrSize;
+	memset((void*)(if_->rsp), NULL, chPtrSize);
+	
+
+	for (i = argc - 1; i >= 0; i--)
+	{
+		if_->rsp -= chPtrSize; // 빼준다
+		memcpy((void*)(if_->rsp), &tokenArr[i], chPtrSize);
+	}
+
+	if_->R.rsi = if_->rsp;
+	if_->R.rdi = argc;
+
+	size_t voidFPtrSize = sizeof(void(*)());
+	if_->rsp -= voidFPtrSize;
+	memset((void*)(if_->rsp),NULL,voidFPtrSize);
 
 	success = true;
 

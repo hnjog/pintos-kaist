@@ -20,10 +20,16 @@
             ],
             "args": [
                 "--gdb",
+                "-v",
+                "-k",
+                "-T", "60",
+                "-m", "20",
+                "--fs-disk=10",
+                "-p", "tests/userprog/args-single:args-single",
                 "--",
                 "-q",
-                "run",
-                "${input:test}"
+                "-f", "run",
+                "args-single", "onearg"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

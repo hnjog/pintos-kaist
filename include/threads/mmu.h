@@ -20,9 +20,9 @@ void pml4_set_dirty (uint64_t *pml4, const void *upage, bool dirty);
 bool pml4_is_accessed (uint64_t *pml4, const void *upage);
 void pml4_set_accessed (uint64_t *pml4, const void *upage, bool accessed);
 
-#define is_writable(pte) (*(pte) & PTE_W)
-#define is_user_pte(pte) (*(pte) & PTE_U)
-#define is_kern_pte(pte) (!is_user_pte (pte))
+#define is_writable(pte) (*(pte) & PTE_W)		// pte가 가리키는 가상 주소가 쓰기 가능한지 체크
+#define is_user_pte(pte) (*(pte) & PTE_U)		// page table entry가 사용자 소유 인지 여부
+#define is_kern_pte(pte) (!is_user_pte (pte))	// page table entry가 커널 소유 인지 여부
 
 #define pte_get_paddr(pte) (pg_round_down(*(pte)))
 

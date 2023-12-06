@@ -23,6 +23,7 @@
 /* Offset within a page. */
 #define pg_ofs(va) ((uint64_t) (va) & PGMASK)
 
+// page number return
 #define pg_no(va) ((uint64_t) (va) >> PGBITS)
 
 /* Round up to nearest page boundary. */
@@ -32,6 +33,7 @@
 #define pg_round_down(va) (void *) ((uint64_t) (va) & ~PGMASK)
 
 /* Kernel virtual address start */
+// 0~KERN_BASE : User Virtual memory ranges
 #define KERN_BASE LOADER_KERN_BASE
 
 /* User stack start */
