@@ -72,7 +72,6 @@ void timer_calibrate(void)
 }
 
 /* Returns the number of timer ticks since the OS booted. */
-/* 운영체제가 시작된 후 부터 현재까지 경과한 틱(단위) 시간 반환 */
 int64_t
 timer_ticks(void)
 {
@@ -85,7 +84,6 @@ timer_ticks(void)
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
-/* then 부터 현재까지의 시간경과(틱) 반환 */
 int64_t
 timer_elapsed(int64_t then)
 {
@@ -98,8 +96,9 @@ void timer_sleep(int64_t ticks)
 	int64_t start = timer_ticks();
 
 	ASSERT(intr_get_level() == INTR_ON);
-	// if (timer_elapsed (start) < ticks)    // <-- negative 일 때 사용할 수 있을듯
-	thread_sleep(start + ticks);
+	/* check when the input ticks is negative */
+	if (timer_elapsed(start) < ticks)
+		thread_sleep(start + ticks);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -132,28 +131,18 @@ timer_interrupt(struct intr_frame *args UNUSED)
 {
 	ticks++;
 	thread_tick();
-	/* check sleep list and awake */
-	int64_t curr_time = timer_ticks();
-	if (curr_time >= next_tick_to_awake)
+
+	if (thread_mlfqs)
 	{
-		struct list_elem *e = list_begin(&sleep_list);
-		while (e != list_end(&sleep_list))
+		if ((timer_ticks() % TIMER_FREQ) == 0)
 		{
-			struct thread *t = list_entry(e, struct thread, elem);
-			if (curr_time >= t->wakeup_tick)
-			{
-				/* list_remove returns next element of e */
-				e = list_remove(e);
-				thread_unblock(t);
-				/* external interrupt happened, so we can't change context */
-			}
-			else
-			{
-				e = list_next(e);
-			}
+			update_load_avg();
+			update_recent_cpu();
 		}
+		if ((timer_ticks() % 4) == 0)
+			update_priority();
 	}
-	update_next_tick_to_awake();
+	awake_thread();
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -217,4 +206,28 @@ real_time_sleep(int64_t num, int32_t denom)
 		ASSERT(denom % 1000 == 0);
 		busy_wait(loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000));
 	}
+}
+
+void awake_thread()
+{
+	int64_t curr_time = timer_ticks();
+	if (curr_time >= next_tick_to_awake)
+	{
+		struct list_elem *e = list_begin(&sleep_list);
+		while (e != list_end(&sleep_list))
+		{
+			struct thread *t = list_entry(e, struct thread, elem);
+			if (curr_time >= t->wakeup_tick)
+			{
+				e = list_remove(e);
+				thread_unblock(t);
+				/* external interrupt happened, so we can't change context */
+			}
+			else
+			{
+				e = list_next(e);
+			}
+		}
+	}
+	update_next_tick_to_awake();
 }

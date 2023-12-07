@@ -102,6 +102,10 @@ struct thread
 	struct lock *lock_need;
 	struct list donator_list;
 	struct list_elem d_elem;
+	struct list_elem a_elem;
+
+	int nice;
+	int recent_cpu;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
@@ -163,3 +167,8 @@ int64_t next_tick_to_awake;
 
 void test_max_priority(void);
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void update_load_avg(void);
+void update_recent_cpu(void);
+void update_priority(void);
+struct list all_list;
