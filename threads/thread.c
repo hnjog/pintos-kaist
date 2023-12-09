@@ -128,13 +128,10 @@ thread_init (void) {
 	list_init(&destruction_req);
 	list_init(&ready_list);
 	list_init(&all_list);
-	
-	/* project1 */
 	list_init (&sleep_list);
 	/* sleeplist에서 가장 먼저 깨울 쓰레드 시간 지정용 전역 변수. sleep할 때마다 비교 후 작은 값으로 변경할 것 */
 	global_next_ticks_to_awake = INT64_MAX;
 	
-
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread();
 	init_thread(initial_thread, "main", PRI_DEFAULT);
@@ -231,12 +228,14 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-	list_push_back(&all_list, &t->allElem);//메타메타몽
+	list_push_back(&all_list, &t->allElem);
 	/* Add to run queue. */
 	thread_unblock(t);
 	
 	/*Thread의 unblock 후,현재 실행중인 thread와 우선순위를 비교하여 새로 생성된 thread의 우선순위가 높다면 thread_yield()를 통해 CPU를 양보.*/
-	test_max_priority();
+	if (!list_empty(&ready_list) && thread_current() != idle_thread) {
+		test_max_priority();
+	}
 
 	return tid;
 }
@@ -318,10 +317,9 @@ thread_exit (void) {
 #ifdef USERPROG
 	process_exit ();
 #endif
-
-	/* Just set our status to dying and schedule another process.
-	   We will be destroyed during the call to schedule_tail(). */
-	list_remove(&thread_current()->allElem);
+	/*  스레드가 종료되면 해당 스레드의 노드를 관리 리스트에서 제거해야한다. 
+	그렇지 않으면 다음 스케줄링이나 관련된 작업에서 오류가 발생할 수 있다. */
+	list_remove(&thread_current()->allElem); 
 	intr_disable();
 	do_schedule(THREAD_DYING);
 	NOT_REACHED();
@@ -808,8 +806,8 @@ mlfqs_increment (void) {
 	// 	int cur_recent_cpu = thread_current()->recent_cpu;
     //     thread_current()->recent_cpu = add_mixed(cur_recent_cpu, 1);
 	// }
-	if(thread_current()==idle_thread)return;
-	thread_current()->recent_cpu=add_mixed(thread_current()->recent_cpu,1);
+	if (thread_current() == idle_thread) return;
+	thread_current()->recent_cpu = add_mixed(thread_current()->recent_cpu,1);
 }
 
 void mlfqs_recalc_recent_cpu (void) {

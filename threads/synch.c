@@ -119,8 +119,7 @@ sema_up (struct semaphore *sema) {
 	// priority preemption 기능추가.
 	// waitlist 에서 나가면 readylist로 가기 때문에, preemtion을 readylist의 맨 앞에있는 친구와 현재 스레드를 비교하면 되니까
 	// 이 기능이 이미 구현이 되어있는 test_max_priority()를 호출해서 preemtion을 맞춘다.
-	//test_max_priority();
-	thread_yield();
+	test_max_priority();
 	intr_set_level (old_level);
 }
 
