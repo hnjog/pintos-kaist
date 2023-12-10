@@ -51,6 +51,11 @@ tid_t process_create_initd(const char *file_name)
 		return TID_ERROR;
 	strlcpy(fn_copy, file_name, PGSIZE);
 
+	/* --------------project 2 : arguemnt passing------------ */
+	char *save_ptr;
+	strtok_r(file_name, " ", &save_ptr);
+	/* ------------------------------------------------------ */
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -181,8 +186,24 @@ int process_exec(void *f_name)
 	/* We first kill the current context */
 	process_cleanup();
 
+	// Argument Passing ~
+	char *parse[64];
+	char *token, *save_ptr;
+	int count = 0;
+	for (token = strtok_r(file_name, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr))
+		parse[count++] = token;
+	// ~ Argument Passing
+
 	/* And then load the binary */
 	success = load(file_name, &_if);
+
+	// Argument Passing ~
+	argument_stack(parse, count, &_if.rsp); // 함수 내부에서 parse와 rsp의 값을 직접 변경하기 위해 주소 전달
+	_if.R.rdi = count;
+	_if.R.rsi = (char *)_if.rsp + 8;
+
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
+	// ~ Argument Passing
 
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
@@ -208,6 +229,9 @@ int process_wait(tid_t child_tid UNUSED)
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	for (int i = 0; i < 100000000; i++)
+	{
+	} // temeral code to test the argument passing
 	return -1;
 }
 
@@ -327,7 +351,11 @@ static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
  * and its initial stack pointer into *RSP.
- * Returns true if successful, false otherwise. */
+ * Returns true if successful, false otherwise.
+ * 	이진 파일을 디스크에서 메모리로 로드한다.
+	로드된 후 실행할 메인 함수의 시작 주소 필드 초기화 (if_.rip)
+	user stack의 top 포인터 초기화 (if_.rsp)
+	위 과정을 성공하면 실행을 계속하고, 실패하면 스레드가 종료된다. */
 static bool
 load(const char *file_name, struct intr_frame *if_)
 {
@@ -586,6 +614,71 @@ install_page(void *upage, void *kpage, bool writable)
 	 * address, then map our page there. */
 	return (pml4_get_page(t->pml4, upage) == NULL && pml4_set_page(t->pml4, upage, kpage, writable));
 }
+
+/* --------------project 2 : arguemnt passing------------ */
+/*
+| Address      | Name         | Data        | Type        |
+| -------------|--------------|-------------|-------------|
+| 0x4747fffc   | argv[3][...] | 'bar\0'     | char[4]     |
+| 0x4747fff8   | argv[2][...] | 'foo\0'     | char[4]     |
+| 0x4747fff5   | argv[1][...] | '-l\0'      | char[3]     |
+| 0x4747ffed   | argv[0][...] | '/bin/ls\0' | char[8]     |
+| 0x4747ffe8   | word-align   | 0           | uint8_t[]   |
+| 0x4747ffe0   | argv[4]      | 0           | char *      |
+| 0x4747ffd8   | argv[3]      | 0x4747fffc  | char *      |
+| 0x4747ffd0   | argv[2]      | 0x4747fff8  | char *      |
+| 0x4747ffc8   | argv[1]      | 0x4747fff5  | char *      |
+| 0x4747ffc0   | argv[0]      | 0x4747ffed  | char *      |
+| 0x4747ffb8   | return addr  | 0           | void (*)()  |
+
+<argument stack downwards using rsp stack pointer>
+if_->rsp:   struct intr_frame 구조체의 rsp 멤버 변수는 스택 포인터
+if_->R:     struct intr_frame 구조체의 R 멤버 변수는 레지스터의 값
+if_->R.rdi: R.rdi는 함수 호출 시 첫 번째 인수를 전달하는 레지스터
+if_->R.rsi: R.rsi는 함수 호출 시 두 번째 인수를 전달하는 레지스터
+
+parse: 프로그램 이름과 인자가 담긴 배열 (char *parse[64];)
+count: 인자의 개수
+rsp: 스택 포인터를 가리키는 주소 값 (&_if.rsp)
+*/
+void argument_stack(char **parse, int count, void **rsp) // 주소를 전달받았으므로 이중 포인터 사용
+{
+	// 프로그램 이름, 인자 문자열 push
+	for (int i = count - 1; i > -1; i--) // Minus i to store the elements from the end of the array.
+	{
+		for (int j = strlen(parse[i]); j > -1; j--)
+		{
+			(*rsp)--;					  // 문자 한개당 1바이트씩 감소
+			**(char **)rsp = parse[i][j]; // parse[i][j]에 들어있는 값을 현재의 스택 주소(rsp)에 저장 (for문 돌면서 b, a, r, \0 저장)
+		}
+		parse[i] = *(char **)rsp; // parse[i]를 현재 문자열의 시작 주소로 업데이트
+	}
+
+	// 정렬 패딩 push
+	int padding = (int)*rsp % 8;
+	for (int i = 0; i < padding; i++)
+	{
+		(*rsp)--;
+		**(uint8_t **)rsp = 0; // rsp 직전까지 값 채움(후위연산이라)
+	}
+
+	// 인자 문자열 종료를 나타내는 0 push
+	(*rsp) -= 8;
+	**(char ***)rsp = 0; // char* 타입의 0 추가
+
+	// 각 인자 문자열의 주소 push
+	for (int i = count - 1; i > -1; i--)
+	{
+		(*rsp) -= 8;				// 다음 주소로 이동
+		**(char ***)rsp = parse[i]; // char* 타입의 주소 추가
+	}
+
+	// return address push
+	(*rsp) -= 8;
+	**(void ***)rsp = 0; // void* 타입의 0 추가
+}
+/* ------------------------------------------------------ */
+
 #else
 /* From here, codes will be used after project 3.
  * If you want to implement the function for only project 2, implement it on the
