@@ -12,13 +12,16 @@ Formatting file system...done.
 Boot complete.
 Putting 'read-stdout' into the file system...
 Executing 'read-stdout':
+(read-stdout) begin
+(read-stdout) end
+read-stdout: exit(0)
 Execution of 'read-stdout' complete.
-Timer: 64 ticks
-Thread: 30 idle ticks, 36 kernel ticks, 0 user ticks
+Timer: 70 ticks
+Thread: 30 idle ticks, 38 kernel ticks, 2 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 80 reads, 232 writes
 hd1:0: 102 reads, 0 writes
-Console: 797 characters output
+Console: 856 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

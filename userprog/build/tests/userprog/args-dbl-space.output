@@ -12,13 +12,21 @@ Formatting file system...done.
 Boot complete.
 Putting 'args-dbl-space' into the file system...
 Executing 'args-dbl-space two  spaces!':
-Execution of 'args-dbl-space two  spaces!' complete.
-Timer: 63 ticks
-Thread: 30 idle ticks, 34 kernel ticks, 0 user ticks
+(args) begin
+(args) argc = 3
+(args) argv[0] = 'args-dbl-space'
+(args) argv[1] = 'two'
+(args) argv[2] = 'spaces!'
+(args) argv[3] = null
+(args) end
+args-dbl-space: exit(0)
+Execution of 'args-dbl-space' complete.
+Timer: 71 ticks
+Thread: 30 idle ticks, 38 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 51 reads, 232 writes
+hd0:1: 80 reads, 232 writes
 hd1:0: 102 reads, 0 writes
-Console: 853 characters output
+Console: 1010 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

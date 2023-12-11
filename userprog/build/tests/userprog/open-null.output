@@ -12,13 +12,15 @@ Formatting file system...done.
 Boot complete.
 Putting 'open-null' into the file system...
 Executing 'open-null':
+(open-null) begin
+open-null: exit(-1)
 Execution of 'open-null' complete.
-Timer: 65 ticks
-Thread: 30 idle ticks, 37 kernel ticks, 0 user ticks
+Timer: 68 ticks
+Thread: 30 idle ticks, 37 kernel ticks, 1 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 80 reads, 232 writes
 hd1:0: 102 reads, 0 writes
-Console: 787 characters output
+Console: 825 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...
