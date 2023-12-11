@@ -18,6 +18,9 @@
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 
+bool create(const char *file, unsigned initial_size);
+bool remove(const char *file);
+
 struct lock filesys_lock;
 
 /* System call.
@@ -60,11 +63,32 @@ void syscall_handler(struct intr_frame *f UNUSED)
 	case SYS_EXIT:
 		exit(f->R.rdi);
 		break;
+	case SYS_CREATE:
+		f->R.rax = create(f->R.rdi, f->R.rsi);
+		break;
+	case SYS_REMOVE:
+		f->R.rax = remove(f->R.rdi);
+		break;
+	case SYS_OPEN:
+		f->R.rax = open(f->R.rdi);
+		break;
+	case SYS_FILESIZE:
+		f->R.rax = filesize(f->R.rdi);
+		break;
 	case SYS_READ:
 		f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 		break;
 	case SYS_WRITE:
 		f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
+		break;
+	case SYS_SEEK:
+		seek(f->R.rdi, f->R.rsi);
+		break;
+	case SYS_TELL:
+		f->R.rax = tell(f->R.rdi);
+		break;
+	case SYS_CLOSE:
+		close(f->R.rdi);
 		break;
 	default:
 		exit(-1);
@@ -86,6 +110,34 @@ void exit(int status)
 	curr->exit_status = status;
 	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
+}
+
+int open(const char *file)
+{
+	check_address(file);
+	struct file *open_file = filesys_open(file);
+
+	if (open_file == NULL)
+	{
+		return -1;
+	}
+	int fd = process_add_file(open_file);
+	if (fd == -1)
+	{
+		file_close(open_file);
+	}
+	return fd;
+}
+
+int filesize(int fd)
+{
+	struct file *file = process_get_file(fd);
+
+	if (file == NULL)
+	{
+		return -1;
+	}
+	return file_length(file);
 }
 
 int read(int fd, void *buffer, unsigned size)
@@ -151,6 +203,51 @@ int write(int fd, const void *buffer, unsigned size)
 		write_size = file_write(file, buffer, size);
 		lock_release(&filesys_lock);
 	}
+}
+
+void seek(int fd, unsigned position)
+{
+	struct file *file = process_get_file(fd);
+
+	if (fd < 2)
+	{
+		return;
+	}
+	return file_seek(file, position);
+}
+
+unsigned tell(int fd)
+{
+	struct file *file = process_get_file(fd);
+
+	if (fd < 2)
+	{
+		return;
+	}
+	return file_tell(file);
+}
+
+void close(int fd)
+{
+	struct file *file = process_get_file(fd);
+
+	if (file == NULL)
+	{
+		return;
+	}
+	process_close_file(fd);
+}
+
+bool create(const char *file, unsigned initial_size)
+{
+	check_address(file);
+	return filesys_create(file, initial_size);
+}
+
+bool remove(const char *file)
+{
+	check_address(file);
+	return filesys_remove(file);
 }
 
 void check_address(void *addr)

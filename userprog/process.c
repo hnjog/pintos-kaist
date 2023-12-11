@@ -374,6 +374,7 @@ load(const char *file_name, struct intr_frame *if_)
 
 	/* Open executable file. */
 	file = filesys_open(file_name);
+	// file_deny_write(file);
 	if (file == NULL)
 	{
 		printf("load: %s: open failed\n", file_name);
@@ -761,5 +762,7 @@ void process_close_file(int fd)
 	{
 		return;
 	}
+	file_close(fd);
+
 	curr->fd_table[fd] = NULL;
 }

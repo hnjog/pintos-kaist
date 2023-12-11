@@ -216,7 +216,7 @@ tid_t thread_create(const char *name, int priority,
 
 	/* file descriptor init */
 	t->fd_table = palloc_get_page(PAL_ZERO);
-	// t->fd_idx = 2;
+	t->fd_idx = 2;
 
 	return tid;
 }
