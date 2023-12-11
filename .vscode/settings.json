@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.ejs": "html",
+        "*.inc": "c",
+        "filesys.h": "c",
+        "thread.h": "c",
+        "init.h": "c",
+        "file.h": "c"
+    }
+}
