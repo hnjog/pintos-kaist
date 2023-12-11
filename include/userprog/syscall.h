@@ -2,7 +2,7 @@
 #define USERPROG_SYSCALL_H
 
 #include "include/lib/user/syscall.h"
-#include "include/threads/synch.h"
+#include "threads/synch.h"
 
 void syscall_init (void);
 
@@ -24,6 +24,6 @@ void close (int fd);
 
 int dup2(int oldfd, int newfd);
 
-//struct lock filesys_lock;
+struct lock filesys_lock;
 
 #endif /* userprog/syscall.h */

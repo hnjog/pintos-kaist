@@ -129,6 +129,7 @@ struct thread {
 	// fd 관련
 	struct file** fdt; // 최대 64개
 	int focusing_fd;
+	struct file* useFile;
 };
 
 /* If false (default), use round-robin scheduler.

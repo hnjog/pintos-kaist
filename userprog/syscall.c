@@ -51,7 +51,7 @@ syscall_init (void) {
 			((uint64_t)SEL_KCSEG) << 32);
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
 
-	//lock_init(&filesys_lock);
+	lock_init(&filesys_lock);
 
 	/* The interrupt service rountine should not serve any interrupts
 	 * until the syscall_entry swaps the userland stack to the kernel
@@ -187,7 +187,7 @@ int exec (const char *file)
 	// char* copy_fn = palloc_get_page(PAL_ZERO);
 	// if(copy_fn == NULL)
 	// {
-	// 	sys_exit(-1);
+	// 	exit(-1);
 	// }
 
 	// strlcpy(copy_fn,file,fileNameLen);
@@ -201,7 +201,7 @@ int exec (const char *file)
 	return 0;
 }
 
-int wait(int pid)
+int wait(pid_t pid)
 {
 	process_wait(pid);
 }
@@ -224,8 +224,6 @@ bool create (const char *file, unsigned initial_size)
 	check_address(file);
 	return filesys_create(file,initial_size);
 }
-
-
 
 bool remove (const char *file)
 {
@@ -313,9 +311,9 @@ int read (int fd, void *buffer, unsigned length)
 			return -1;
 		}
 
-		//lock_acquire(&filesys_lock);
+		lock_acquire(&filesys_lock);
 		reads = file_read(targetFile,buffer,length);
-		//lock_release(&filesys_lock);
+		lock_release(&filesys_lock);
 	}
 
 	return reads;
@@ -350,9 +348,9 @@ int write (int fd, const void *buffer, unsigned length)
 			return -1;
 		}
 
-		//lock_acquire(&filesys_lock);
+		lock_acquire(&filesys_lock);
 		writes = file_write(targetFile,buffer,length);
-		//lock_release(&filesys_lock);
+		lock_release(&filesys_lock);
 	}
 
 	return writes;

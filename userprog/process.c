@@ -231,6 +231,7 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	file_close(curr->useFile);
 	process_cleanup ();
 }
 
@@ -367,8 +368,8 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	// t->useFile = file;
-	// file_deny_write(file);
+	t->useFile = file;
+	file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
