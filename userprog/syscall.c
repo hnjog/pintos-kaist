@@ -11,6 +11,7 @@
 #include "include/threads/init.h"
 #include "include/threads/vaddr.h"
 #include "include/filesys/filesys.h"
+#include "include/filesys/file.h"
 #include "include/devices/input.h"
 #include "string.h"
 #include "kernel/stdio.h"
@@ -182,22 +183,22 @@ void halt (void)
 int exec (const char *file)
 {
 	check_address(file);
-	// size_t fileNameLen = strlen(file);
+	size_t fileNameLen = strlen(file);
 
-	// char* copy_fn = palloc_get_page(PAL_ZERO);
-	// if(copy_fn == NULL)
-	// {
-	// 	exit(-1);
-	// }
+	char* copy_fn = palloc_get_page(PAL_ZERO);
+	if(copy_fn == NULL)
+	{
+		exit(-1);
+	}
 
-	// strlcpy(copy_fn,file,fileNameLen);
+	strlcpy(copy_fn,file,fileNameLen);
 
-	// if(process_exec(copy_fn) == -1)
-	// {
-	// 	return -1;
-	// }
+	if(process_exec(copy_fn) == -1)
+	{
+		return -1;
+	}
 	
-	// NOT_REACHED();
+	NOT_REACHED();
 	return 0;
 }
 
