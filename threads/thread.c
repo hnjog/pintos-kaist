@@ -227,6 +227,13 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	t->fdt = palloc_get_page(PAL_ZERO);
+	if(t->fdt == NULL)
+		return TID_ERROR;
+
+	t->fdt[0] = 1;
+	t->fdt[1] = 2;
+
 	/* Add to run queue. */
 	thread_unblock(t);
 
@@ -611,6 +618,8 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->fp_recent_cpu = RECENT_CPU_DEFAULT;
 
 	list_push_back(&all_list,&t->allElem);
+
+	t->exit_Status = 0;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -1032,4 +1041,30 @@ void atrp_recalc(void)
 
 		tempElem = tempElem->next;
 	}
+}
+
+// 현재 스레드의 다음 fd 찾아주는 용도의
+int search_nextFD(struct file* file)
+{
+	if(file == NULL)
+	{
+		return -1;
+	}
+
+	struct thread* curr = thread_current();
+
+	while (curr->focusing_fd < MAX_FD_VALUE && curr->fdt[curr->focusing_fd] != NULL)
+	{
+		curr->focusing_fd++;
+	}
+
+	// 현재 빈 곳이 없음
+	if(curr->focusing_fd >= MAX_FD_VALUE)
+	{
+		return -1;
+	}
+
+	curr->fdt[curr->focusing_fd] = file;
+
+	return curr->focusing_fd;
 }

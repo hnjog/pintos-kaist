@@ -29,7 +29,7 @@
                 "--",
                 "-q",
                 "-f", "run",
-                "args-single", "onearg"
+                "args-single onearg"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

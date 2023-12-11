@@ -123,6 +123,12 @@ struct thread {
 	int fp_recent_cpu;
 
 	struct list_elem allElem;
+
+	int exit_Status;
+
+	// fd 관련
+	struct file** fdt; // 최대 64개
+	int focusing_fd;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -185,5 +191,8 @@ void recent_cpu_incre(void);
 
 // all thread recent_cpu prority re_calculate
 void atrp_recalc(void);
+
+#define MAX_FD_VALUE 64
+int search_nextFD(struct file* file);
 
 #endif /* threads/thread.h */

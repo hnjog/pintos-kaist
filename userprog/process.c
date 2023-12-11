@@ -51,6 +51,10 @@ process_create_initd (const char *file_name) {
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
 
+	char* savePtr = NULL;
+
+	strtok_r(file_name," ",&savePtr);
+
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -183,7 +187,12 @@ process_exec (void *f_name) {
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
+	{
 		return -1;
+	}
+
+	//printf("rsp address : %p\n",&_if.rsp);
+	//hex_dump(_if.rsp,_if.rsp,USER_STACK - (uint64_t)(&_if.rsp),true);
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -205,7 +214,10 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	for(;;);
+	for(int i = 0;i < 500000000; i++)
+	{
+
+	}
 
 	return -1;
 }
@@ -355,6 +367,9 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
+	// t->useFile = file;
+	// file_deny_write(file);
+
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -427,11 +442,9 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
+	uintptr_t argv[128] = {NULL,};
 	
 	size_t argc = 0;
-
-
 	while (tokenStr != NULL)
 	{
 		tokenArr[argc] = tokenStr;
@@ -439,13 +452,12 @@ load (const char *file_name, struct intr_frame *if_) {
 		tokenStr = strtok_r(NULL," ",&savePtr);
 	}
 
-
-	// rsp 위치에 문자열 데이터 쓰기
 	for (i = argc - 1; i >= 0; i--)
 	{
 		nameSize = strlen(tokenArr[i]);
-		if_->rsp -= nameSize; // 빼준다
-		memcpy((void*)(if_->rsp), tokenArr[i], nameSize);
+		if_->rsp -= nameSize + 1; // 빼준다
+		memcpy((void*)(if_->rsp), tokenArr[i], nameSize + 1);
+		argv[i] = if_->rsp;
 	}
 
 	// align 해주기
@@ -460,12 +472,11 @@ load (const char *file_name, struct intr_frame *if_) {
 	size_t chPtrSize = sizeof(char *);
 	if_->rsp -= chPtrSize;
 	memset((void*)(if_->rsp), NULL, chPtrSize);
-	
 
 	for (i = argc - 1; i >= 0; i--)
 	{
 		if_->rsp -= chPtrSize; // 빼준다
-		memcpy((void*)(if_->rsp), &tokenArr[i], chPtrSize);
+		memcpy((void*)(if_->rsp), &argv[i], chPtrSize);
 	}
 
 	if_->R.rsi = if_->rsp;
@@ -476,10 +487,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	memset((void*)(if_->rsp),NULL,voidFPtrSize);
 
 	success = true;
-
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	//file_close (file);
 	return success;
 }
 
