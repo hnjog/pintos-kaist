@@ -203,6 +203,7 @@ int write(int fd, const void *buffer, unsigned size)
 		write_size = file_write(file, buffer, size);
 		lock_release(&filesys_lock);
 	}
+	return write_size;
 }
 
 void seek(int fd, unsigned position)

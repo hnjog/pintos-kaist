@@ -247,6 +247,12 @@ void process_exit(void)
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	int idx = curr->fd_idx;
+	for (idx; idx >= 2; idx--)
+	{
+		file_close(curr->fd_table[idx]);
+		curr->fd_table[idx] = NULL;
+	}
 
 	process_cleanup();
 }
@@ -762,7 +768,6 @@ void process_close_file(int fd)
 	{
 		return;
 	}
-	file_close(fd);
-
+	file_close(curr->fd_table[fd]);
 	curr->fd_table[fd] = NULL;
 }
