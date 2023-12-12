@@ -231,6 +231,11 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
+	for(int i = 0; i < MAX_FD_VALUE;i++)
+	{
+		close(i);
+	}
+
 	file_close(curr->useFile);
 	process_cleanup ();
 }
