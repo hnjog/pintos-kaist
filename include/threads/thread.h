@@ -9,6 +9,8 @@
 #include "vm/vm.h"
 #endif
 
+#include "synch.h"
+struct semaphore;
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -130,6 +132,12 @@ struct thread {
 	struct file** fdt; // 최대 64개
 	int focusing_fd;
 	struct file* useFile;
+
+	struct list childList;
+	struct list_elem childElem;
+
+	struct semaphore waitSema;
+	struct semaphore freeSema;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -195,5 +203,6 @@ void atrp_recalc(void);
 
 #define MAX_FD_VALUE 64
 int search_nextFD(struct file* file);
+struct thread* find_child_By_tid(tid_t _tid);
 
 #endif /* threads/thread.h */

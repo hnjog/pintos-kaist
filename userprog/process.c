@@ -23,6 +23,8 @@
 #include "vm/vm.h"
 #endif
 
+#define MAX_ARGS 128
+
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -181,18 +183,29 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	process_cleanup ();
 
+	/* project 2: argument passing */
+    char *argv[MAX_ARGS];
+    int argc = 0;
+	tokenizer(file_name, argv, &argc);
+	/* project 2: argument passing */
+
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+	// sema_up(&thread_current ()->load_sema);
+
 	/* If load failed, quit. */
+	if (!success) {
 	palloc_free_page (file_name);
-	if (!success)
-	{
 		return -1;
 	}
 
-	//printf("rsp address : %p\n",&_if.rsp);
-	//hex_dump(_if.rsp,_if.rsp,USER_STACK - (uint64_t)(&_if.rsp),true);
+	/* project 2: argument passing */
+    stacker(argv, argc, &_if);
+    _if.R.rdi = argc;
+	_if.R.rsi = _if.rsp + 8;
+	//hex_dump(_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
+	/* project 2: argument passing */
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -210,16 +223,22 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (tid_t child_tid) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	for(int i = 0;i < 500000000; i++)
-	{
 
+	struct thread *child = find_child_By_tid(child_tid);
+	if (child == NULL)
+	{
+		return -1;
 	}
 
-	return -1;
+	sema_down (&child->waitSema);
+	list_remove (&child->childElem);
+	int exit_status = child->exit_Status;
+	sema_up (&child->freeSema);
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -231,14 +250,23 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 
-	for(int i = 0; i < MAX_FD_VALUE;i++)
+	for (int i = 2; i < curr->focusing_fd; i++) 
+	{
+		if(curr->fdt[i] != NULL)
 	{
 		close(i);
 	}
+	}
+
 	palloc_free_page(curr->fdt);
+	//palloc_free_multiple(curr->fdt, FDT_PAGES);
 
 	file_close(curr->useFile);
-	process_cleanup ();
+
+	process_cleanup();
+
+	sema_up(&curr->waitSema);
+	sema_down (&curr->freeSema);
 }
 
 /* Free the current process's resources. */
@@ -351,16 +379,6 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 
-	size_t nameSize = strlen(file_name);
-	char* tokenStr = NULL;
-	char* savePtr = NULL;
-	char* tokenArr[128] = {0,};
-	char copy_fn[256] = {0,};
-	memcpy(copy_fn,file_name,nameSize);
-	copy_fn[nameSize] = '\0';
-
-	tokenStr = strtok_r(copy_fn," ",&savePtr);
-
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -368,7 +386,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (tokenStr); // file_name
+	file = filesys_open (file_name);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
@@ -443,60 +461,19 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
-	// 여기서 rsp 세팅(스택 top 포인터)
 	if (!setup_stack (if_))
 		goto done;
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-	uintptr_t argv[128] = {NULL,};
-	
-	size_t argc = 0;
-	while (tokenStr != NULL)
-	{
-		tokenArr[argc] = tokenStr;
-		argc++;
-		tokenStr = strtok_r(NULL," ",&savePtr);
-	}
 
-	for (i = argc - 1; i >= 0; i--)
-	{
-		nameSize = strlen(tokenArr[i]);
-		if_->rsp -= nameSize + 1; // 빼준다
-		memcpy((void*)(if_->rsp), tokenArr[i], nameSize + 1);
-		argv[i] = if_->rsp;
-	}
-
-	// align 해주기
-	size_t alignValue = (if_->rsp % 8);
-	if(alignValue != 0)
-	{
-		if_->rsp -= alignValue;
-		memset((void*)(if_->rsp), NULL, alignValue);
-	}
-
-	// argv에 초과되지 않도록 null 한번 넣어주기
-	size_t chPtrSize = sizeof(char *);
-	if_->rsp -= chPtrSize;
-	memset((void*)(if_->rsp), NULL, chPtrSize);
-
-	for (i = argc - 1; i >= 0; i--)
-	{
-		if_->rsp -= chPtrSize; // 빼준다
-		memcpy((void*)(if_->rsp), &argv[i], chPtrSize);
-	}
-
-	if_->R.rsi = if_->rsp;
-	if_->R.rdi = argc;
-
-	size_t voidFPtrSize = sizeof(void(*)());
-	if_->rsp -= voidFPtrSize;
-	memset((void*)(if_->rsp),NULL,voidFPtrSize);
+	/* TODO: Your code goes here.
+	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	success = true;
+
 done:
 	/* We arrive here whether the load is successful or not. */
-	//file_close (file);
 	return success;
 }
 
@@ -535,7 +512,6 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 
 	/* Disallow mapping page 0.
 	   Not only is it a bad idea to map page 0, but if we allowed
-	   it then user code that passed a null pointer to system calls
 	   could quite likely panic the kernel by way of null pointer
 	   assertions in memcpy(), etc. */
 	if (phdr->p_vaddr < PGSIZE)
@@ -712,3 +688,47 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 #endif /* VM */
+
+
+void tokenizer(char *file_name, char **argv, int *argc) {
+	char *token, *save_ptr;
+	token = strtok_r(file_name, " ", &save_ptr);
+	while (token != NULL) {
+		argv[*argc] = token;
+		token = strtok_r(NULL, " ", &save_ptr);
+		(*argc)++;
+	}
+}
+
+void stacker(char **argv, int argc, struct intr_frame *if_) {
+	/* stacking variables */
+	char *addrs[MAX_ARGS];
+	int i = argc-1;
+	while (i >= 0) 
+	{
+		int arglen = strlen(argv[i]);
+		if_->rsp -= arglen + 1;
+		strlcpy(if_->rsp, argv[i], arglen + 1);
+		addrs[i--] = if_->rsp;
+	}
+
+	while (if_->rsp % 8 != 0) {
+		if_->rsp--;
+		*(uint8_t *)if_->rsp = 0;
+	}
+
+	/* null pointer sentiel */
+	if_->rsp -= 8;
+	*(uint64_t *)if_->rsp = 0;
+
+	/* stacking addresses */
+	i = argc-1;
+	while (i >= 0) {
+		if_->rsp -= 8;
+		*(uint64_t *)if_->rsp = (uint64_t)addrs[i--];
+	}
+	
+	/* fake return address */
+	if_->rsp -= 8;
+	*(uint64_t *)if_->rsp = 0;
+}

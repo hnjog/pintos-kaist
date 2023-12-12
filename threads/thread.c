@@ -227,13 +227,16 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	t->fdt = palloc_get_page(PAL_ZERO);
+	t->fdt = (struct file **)palloc_get_page(PAL_ZERO);
 	if(t->fdt == NULL)
 		return TID_ERROR;
 
 	t->fdt[0] = 1;
 	t->fdt[1] = 2;
 	t->focusing_fd = 2;
+
+	struct thread* curr = thread_current();
+	list_push_back(&curr->childList,&t->childElem);
 
 	/* Add to run queue. */
 	thread_unblock(t);
@@ -622,6 +625,11 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	t->exit_Status = 0;
 	t->useFile = NULL;
+
+	list_init(&t->childList);
+
+	sema_init(&t->waitSema, 0);
+	sema_init(&t->freeSema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -1069,4 +1077,31 @@ int search_nextFD(struct file* file)
 	curr->fdt[curr->focusing_fd] = file;
 
 	return curr->focusing_fd;
+}
+
+struct thread* find_child_By_tid(tid_t _tid)
+{
+	struct thread* curr = thread_current();
+
+	if(list_empty(&curr->childList) == true)
+	{
+		return NULL;
+	}
+
+	struct list_elem* tempElem = list_begin(&curr->childList);
+	struct list_elem* tailElem = list_tail(&curr->childList);
+	struct thread* tempT = NULL;
+	
+	while (tempElem != tailElem)
+	{
+		tempT = list_entry(tempElem, struct thread, childElem);
+		if(tempT->tid == _tid)
+		{
+			return tempT;
+		}
+
+		tempElem = tempElem->next;
+	}
+	
+	return NULL;
 }

@@ -22,7 +22,7 @@
                 "--gdb",
                 "-v",
                 "-k",
-                "-T", "60",
+                //"-T", "60",
                 "-m", "20",
                 "--fs-disk=10",
                 "-p", "tests/userprog/args-single:args-single",

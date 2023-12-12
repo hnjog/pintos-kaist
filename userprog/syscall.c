@@ -71,6 +71,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		return;
 	}
 
+	struct thread* curr = thread_current();
+
 	check_address((void*)(f->rsp));
 
 	switch (f->R.rax)
@@ -322,6 +324,8 @@ int read (int fd, void *buffer, unsigned length)
 int write (int fd, const void *buffer, unsigned length)
 {
 	check_address(buffer);
+	check_address(buffer + length);
+	
 	if(fd == 0)
 	{
 		return -1;
