@@ -212,7 +212,7 @@ int exec (const char *file)
 		exit(-1);
 	}
 
-	strlcpy(copy_fn,file,fileNameLen);
+	strlcpy(copy_fn,file,fileNameLen+1);
 
 	if(process_exec(copy_fn) == -1)
 	{
@@ -223,7 +223,7 @@ int exec (const char *file)
 	return 0;
 }
 
-int wait(pid_t pid)
+int wait(tid_t pid)
 {
 	process_wait(pid);
 }

@@ -138,6 +138,9 @@ struct thread {
 
 	struct semaphore waitSema;
 	struct semaphore freeSema;
+
+	struct intr_frame parent_f;
+	struct semaphore forkSema;
 };
 
 /* If false (default), use round-robin scheduler.
