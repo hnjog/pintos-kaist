@@ -25,11 +25,11 @@
                 //"-T", "60",
                 "-m", "20",
                 "--fs-disk=10",
-                "-p", "tests/userprog/args-single:args-single",
+                "-p", "tests/userprog/no-vm/multi-oom:multi-oom",
                 "--",
                 "-q",
                 "-f", "run",
-                "args-single onearg"
+                "multi-oom"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

@@ -204,7 +204,10 @@ void recent_cpu_incre(void);
 // all thread recent_cpu prority re_calculate
 void atrp_recalc(void);
 
-#define MAX_FD_VALUE 64
+//#define MAX_FD_VALUE 64
+#define MAX_PAGE_COUNT 3
+#define MAX_FD_VALUE (1 << 9) * MAX_PAGE_COUNT
+
 int search_nextFD(struct file* file);
 struct thread* find_child_By_tid(tid_t _tid);
 

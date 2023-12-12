@@ -227,7 +227,8 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
-	t->fdt = (struct file **)palloc_get_page(PAL_ZERO);
+	//t->fdt = (struct file **)palloc_get_page(PAL_ZERO);
+	t->fdt = palloc_get_multiple(PAL_ZERO,3);
 	if(t->fdt == NULL)
 		return TID_ERROR;
 
@@ -630,7 +631,7 @@ init_thread(struct thread *t, const char *name, int priority)
 
 	sema_init(&t->waitSema, 0);
 	sema_init(&t->freeSema, 0);
-	
+
 	sema_init(&t->forkSema, 0);
 }
 

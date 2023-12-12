@@ -317,8 +317,8 @@ process_exit (void) {
 		}
 	}
 
-	palloc_free_page(curr->fdt);
-	//palloc_free_multiple(curr->fdt, FDT_PAGES);
+	//palloc_free_page(curr->fdt);
+	palloc_free_multiple(curr->fdt, MAX_PAGE_COUNT);
 
 	file_close(curr->useFile);
 
