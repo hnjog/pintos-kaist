@@ -21,6 +21,26 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+void syscall_init (void);
+
+// syscall Functions
+void halt (void) NO_RETURN;
+void exit (int status) NO_RETURN;
+tid_t fork (const char *thread_name, struct intr_frame* f);
+int exec (const char *file);
+int wait (pid_t);
+bool create (const char *file, unsigned initial_size);
+bool remove (const char *file);
+int open (const char *file);
+int filesize (int fd);
+int read (int fd, void *buffer, unsigned length);
+int write (int fd, const void *buffer, unsigned length);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+
+int dup2(int oldfd, int newfd);
+
 // util func
 // 주소 값이 '유저 영역' 값인지 확인하고 벗어난 영역이라면 프로세스 종료
 void check_address(void* addr)
@@ -91,7 +111,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	case SYS_FORK:
 		{
 			char* thread_name = (char*)(f->R.rdi);
-			f->R.rax = fork(thread_name);
+			f->R.rax = fork(thread_name,f);
 		}
 		break;
 	case SYS_EXEC:
@@ -102,8 +122,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		break;
 	case SYS_WAIT:
 		{
-			pid_t pid = (pid_t)(f->R.rdi);
-			f->R.rax = wait(pid);
+			f->R.rax = wait(f->R.rdi);
 		}
 		break;
 	case SYS_CREATE:
@@ -217,9 +236,10 @@ void exit (int status)
 	thread_exit();
 }
 
-pid_t fork (const char *thread_name)
+tid_t fork (const char *thread_name, struct intr_frame* f)
 {
 	check_address(thread_name);
+	return process_fork(thread_name,f);
 }
 
 bool create (const char *file, unsigned initial_size)
@@ -325,7 +345,7 @@ int write (int fd, const void *buffer, unsigned length)
 {
 	check_address(buffer);
 	check_address(buffer + length);
-	
+
 	if(fd == 0)
 	{
 		return -1;
