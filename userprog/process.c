@@ -1,3 +1,4 @@
+#include "lib/user/syscall.h" // need to call syscall_close
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -82,9 +83,17 @@ initd(void *f_name)
  * TID_ERROR if the thread cannot be created. */
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
-	/* Clone current thread to new thread.*/
-	return thread_create(name,
-						 PRI_DEFAULT, __do_fork, thread_current());
+	struct thread *curr = thread_current;
+	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame)); // copying curr's parent to if_
+
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr); // make a new thread it's forked
+	if (tid == TID_ERROR)
+		return TID_ERROR;
+
+	struct thread *child = get_child_process(tid); // finding the child thread
+	sema_down(&child->load_sema);				   // giving sema to the child to make parent waits
+
+	return tid;
 }
 
 #ifndef VM
@@ -132,11 +141,12 @@ __do_fork(void *aux)
 	struct thread *parent = (struct thread *)aux;
 	struct thread *current = thread_current();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &parent->parent_if; // saving parent thread's value
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+	if_.R.rax = 0; // setting child's return value as 0
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -159,13 +169,26 @@ __do_fork(void *aux)
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
-	process_init();
+	if (parent->next_fd == FDCOUNT_LIMIT)
+		goto error;
+
+	// copy the parent's FDT to child's fdt
+	for (int fd = 2; fd < FDCOUNT_LIMIT; fd++)
+	{
+		struct file *file = parent->fdt[fd];
+		if (file == NULL)
+			continue;
+		current->fdt[fd] = file_duplicate(file); // copy the file and store in child's fdt
+	}
+	current->next_fd = parent->next_fd;
+	sema_up(&current->load_sema); // fork가 정상적으로 완료 되었으므로 현재 wait 중인 부모
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret(&if_);
 error:
-	thread_exit();
+	sema_up(&parent->load_sema);
+	exit(TID_ERROR);
 }
 
 /* Switch the current execution context to the f_name.
@@ -226,25 +249,36 @@ int process_exec(void *f_name)
  * does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	for (int i = 0; i < 100000000; i++)
-	{
-	} // temeral code to test the argument passing
-	return -1;
+	struct thread *child = get_child_process(child_tid);
+
+	if (child == NULL)
+		return -1;
+
+	sema_down(&child->wait_sema); // wait until the child's done. (context switch!)
+
+	int exit_status = child->exit_status; // 부모님, 저 이제 끝났습니다
+	list_remove(&child->child_elem); // 그래? 그럼 이제 넌 호적에서 파야겠다
+
+	sema_up(&child->exit_sema); // 아 세마도 뺏어야지
+
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void process_exit(void)
 {
 	struct thread *curr = thread_current();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
-	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	for (int i = 0; i < FDCOUNT_LIMIT; i++)
+		close(i);								// 프로세스 종료시 해당 프로세스의 fdt의 모든 값을 0으로 만든다
+	palloc_free_multiple(curr->fdt, FDT_PAGES); // fd table 메모리 해제
+
+	file_close(curr->running);
 
 	process_cleanup();
+
+	sema_up(&curr->wait_sema);
+	sema_down(&curr->exit_sema);
 }
 
 /* Free the current process's resources. */
@@ -342,11 +376,25 @@ struct ELF64_PHDR
 #define ELF ELF64_hdr
 #define Phdr ELF64_PHDR
 
+struct thread *get_child_process(int pid);
 static bool setup_stack(struct intr_frame *if_);
 static bool validate_segment(const struct Phdr *, struct file *);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
 						 uint32_t read_bytes, uint32_t zero_bytes,
 						 bool writable);
+
+struct thread *get_child_process(int pid)
+{
+	struct thread *curr = thread_current;
+	struct list *child_list = &curr->child_list;
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e)) // searching a process by the pid in the child_list
+	{
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if (t->tid == pid)
+			return t;
+	}
+	return NULL;
+}
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP

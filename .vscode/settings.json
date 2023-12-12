@@ -6,6 +6,7 @@
         "synch.h": "c",
         "interrupt.h": "c",
         "timer.h": "c",
-        "fixed_point.h": "c"
+        "fixed_point.h": "c",
+        "*.inc": "c"
     }
 }

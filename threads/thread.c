@@ -122,22 +122,25 @@ thread_init (void) {
 	};
 	lgdt(&gdt_ds);
 
-	/* Init the globla thread context */
+	/* Init the global thread context */
 	lock_init(&tid_lock);
 	list_init(&ready_list);
 	list_init(&destruction_req);
 	list_init(&ready_list);
 	list_init(&all_list);
-	list_init (&sleep_list);
+	list_init(&sleep_list);
+	
 	/* sleeplist에서 가장 먼저 깨울 쓰레드 시간 지정용 전역 변수. sleep할 때마다 비교 후 작은 값으로 변경할 것 */
 	global_next_ticks_to_awake = INT64_MAX;
-	
+
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread();
 	init_thread(initial_thread, "main", PRI_DEFAULT);
 	list_push_back(&all_list, &(initial_thread->allElem));
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid();
+	initial_thread->exit_flag = false; // proejct 2:syscall
+	initial_thread->exit_status = 0;
 	
 }
 
@@ -228,6 +231,13 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+	/* project 2 : syscall */
+	t->fdt = palloc_get_multiple(PAL_ZERO, FDT_PAGES); // fdt 공간 할당: 0으로 모두 초기화 근데 여기 init_thread 에서 
+	if (t->fdt == NULL) return TID_ERROR;
+	t->next_fd = 2; // 0: stdin, 1: stout
+	t->fdt[0] = 1;
+	t->fdt[1] = 2;
+
 	list_push_back(&all_list, &t->allElem);
 	/* Add to run queue. */
 	thread_unblock(t);
@@ -483,11 +493,19 @@ init_thread (struct thread *t, const char *name, int priority) {
 	/* priority donation */
 	t->pri_before_dona = priority;
 	t->lock_im_waiting = NULL;
-	list_init (&t->donor_list); 
+	list_init (&t->donor_list);
 
 	/* Advanced Scheduler */
 	t->nice = NICE_DEFAULT;
 	t->recent_cpu = RECENT_CPU_DEFAULT;
+
+	/* project 2: fork */
+	t->exit_status = 0;
+	t->running = NULL;
+	list_init (&t->child_list);
+	sema_init(&t->wait_sema, 0);
+	sema_init(&t->load_sema,0);
+	sema_init(&t->exit_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

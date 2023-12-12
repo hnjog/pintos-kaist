@@ -1,7 +1,12 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 #define USERPROG
-
+#define FDT_PAGES 3 // fdt 할당시 필요한 페이지 개수
+#define FDCOUNT_LIMIT FDT_PAGES *(1<<9) // 3(테이블개수) * 512(한 테이블 당 전체 엔트리 개수)
+/* threads/vaddr.h 에 페이지 하나의 사이즈 : 1<<12(PGSIZE)
+ * fd table에 저장하는 파일 객제 포인터의 사이즈 : struct file** -> 8byte
+ * 1<<12 / 1<<3 = 512
+ * 4096  /  8   = 512 */
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
@@ -29,6 +34,8 @@ typedef int tid_t;
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
+
+/* project 2: */
 
 /* A kernel thread or user process.
  *
@@ -110,9 +117,28 @@ struct thread
 	struct list_elem elem; /* List element. */
 	struct list_elem allElem;
 
+	/* project 2: syscall */
+	struct intr_frame parent_if;
+	struct list child_list;
+	struct list_elem child_elem;
+
+	struct file *running;
+	bool exit_flag; /* exit flag to let parent process knows */
+	int exit_status;
+
+	struct semaphore load_sema;
+	struct semaphore exit_sema;
+	struct semaphore wait_sema;
+
+	struct file **file_descriptor_table;
+	int fd_idx;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
+	struct file **fdt; // 파일 디스크립터 테이블(프로세스당 개별적으로 존재). this points the fd table
+	int next_fd; // 다음 fd 인덱스
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

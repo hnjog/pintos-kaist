@@ -10,5 +10,6 @@ int process_wait(tid_t);
 void process_exit(void);
 void process_activate(struct thread *next);
 void argument_stack(char **parse, int count, void **rsp);
+static void __do_fork(void *aux);
 
 #endif /* userprog/process.h */
