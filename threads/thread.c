@@ -233,6 +233,7 @@ tid_t thread_create(const char *name, int priority,
 
 	t->fdt[0] = 1;
 	t->fdt[1] = 2;
+	t->focusing_fd = 2;
 
 	/* Add to run queue. */
 	thread_unblock(t);
