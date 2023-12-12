@@ -235,6 +235,7 @@ process_exit (void) {
 	{
 		close(i);
 	}
+	palloc_free_page(curr->fdt);
 
 	file_close(curr->useFile);
 	process_cleanup ();
