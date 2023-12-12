@@ -187,7 +187,6 @@ process_exec (void *f_name) {
     char *argv[MAX_ARGS];
     int argc = 0;
 	tokenizer(file_name, argv, &argc);
-	/* project 2: argument passing */
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
@@ -196,14 +195,12 @@ process_exec (void *f_name) {
 
 	/* If load failed, quit. */
 	if (!success) {
-	palloc_free_page (file_name);
+		palloc_free_page (file_name);
 		return -1;
 	}
 
 	/* project 2: argument passing */
     stacker(argv, argc, &_if);
-    _if.R.rdi = argc;
-	_if.R.rsi = _if.rsp + 8;
 	//hex_dump(_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
 	/* project 2: argument passing */
 
@@ -701,34 +698,41 @@ void tokenizer(char *file_name, char **argv, int *argc) {
 }
 
 void stacker(char **argv, int argc, struct intr_frame *if_) {
-	/* stacking variables */
-	char *addrs[MAX_ARGS];
-	int i = argc-1;
-	while (i >= 0) 
+	uintptr_t addrs[MAX_ARGS];
+
+	int i = 0;
+	size_t nameSize = 0;
+	for (i = argc - 1; i >= 0; i--)
 	{
-		int arglen = strlen(argv[i]);
-		if_->rsp -= arglen + 1;
-		strlcpy(if_->rsp, argv[i], arglen + 1);
-		addrs[i--] = if_->rsp;
+		nameSize = strlen(argv[i]);
+		if_->rsp -= nameSize + 1; // 빼준다
+		memcpy((void*)(if_->rsp), argv[i], nameSize + 1);
+		addrs[i] = if_->rsp;
 	}
 
-	while (if_->rsp % 8 != 0) {
-		if_->rsp--;
-		*(uint8_t *)if_->rsp = 0;
+	// align 해주기
+	size_t alignValue = (if_->rsp % 8);
+	if(alignValue != 0)
+	{
+		if_->rsp -= alignValue;
+		memset((void*)(if_->rsp), NULL, alignValue);
 	}
 
-	/* null pointer sentiel */
-	if_->rsp -= 8;
-	*(uint64_t *)if_->rsp = 0;
+	// argv에 초과되지 않도록 null 한번 넣어주기
+	size_t chPtrSize = sizeof(char *);
+	if_->rsp -= chPtrSize;
+	memset((void*)(if_->rsp), NULL, chPtrSize);
 
-	/* stacking addresses */
-	i = argc-1;
-	while (i >= 0) {
-		if_->rsp -= 8;
-		*(uint64_t *)if_->rsp = (uint64_t)addrs[i--];
+	for (i = argc - 1; i >= 0; i--)
+	{
+		if_->rsp -= chPtrSize; // 빼준다
+		memcpy((void*)(if_->rsp), &addrs[i], chPtrSize);
 	}
-	
-	/* fake return address */
-	if_->rsp -= 8;
-	*(uint64_t *)if_->rsp = 0;
+
+	if_->R.rsi = if_->rsp;
+	if_->R.rdi = argc;
+
+	size_t voidFPtrSize = sizeof(void(*)());
+	if_->rsp -= voidFPtrSize;
+	memset((void*)(if_->rsp),NULL,voidFPtrSize);
 }
