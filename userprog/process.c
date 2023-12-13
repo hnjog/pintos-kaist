@@ -197,9 +197,6 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
-	if(parent->focusing_fd >= MAX_FD_VALUE)
-		goto error;
-
 	for (int i = 2; i < MAX_FD_VALUE; i++) 
 	{
 		struct file *file = parent->fdt[i];
