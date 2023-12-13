@@ -1,8 +1,7 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
-#define USERPROG
-#define FDT_PAGES 3 // fdt 할당시 필요한 페이지 개수
-#define FDCOUNT_LIMIT FDT_PAGES *(1<<9) // 3(테이블개수) * 512(한 테이블 당 전체 엔트리 개수)
+#define FDT_PAGES 3						   // fdt 할당시 필요한 페이지 개수
+#define FDCOUNT_LIMIT FDT_PAGES * (1 << 9) // 3(테이블개수) * 512(한 테이블 당 전체 엔트리 개수)
 /* threads/vaddr.h 에 페이지 하나의 사이즈 : 1<<12(PGSIZE)
  * fd table에 저장하는 파일 객제 포인터의 사이즈 : struct file** -> 8byte
  * 1<<12 / 1<<3 = 512
@@ -128,16 +127,14 @@ struct thread
 
 	struct semaphore load_sema;
 	struct semaphore exit_sema;
-	struct semaphore wait_sema;
+	struct semaphore wait_sema; // free
 
-	struct file **file_descriptor_table;
-	int fd_idx;
+	struct file **fdt; // 파일 디스크립터 테이블(프로세스당 개별적으로 존재). this points the fd table
+	int next_fd;	   // 다음 fd 인덱스
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
-	struct file **fdt; // 파일 디스크립터 테이블(프로세스당 개별적으로 존재). this points the fd table
-	int next_fd; // 다음 fd 인덱스
 
 #endif
 #ifdef VM

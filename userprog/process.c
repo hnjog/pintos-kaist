@@ -1,4 +1,3 @@
-#include "lib/user/syscall.h" // need to call syscall_close
 #include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
@@ -8,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -195,7 +195,7 @@ error:
  * Returns -1 on fail. */
 int process_exec(void *f_name)
 {
-	char *file_name = f_name;
+	char *file_name = f_name; // file_name은 cmd line 전체로 들어옴
 	bool success;
 
 	/* We cannot use the intr_frame in the thread structure.
@@ -226,7 +226,7 @@ int process_exec(void *f_name)
 	_if.R.rsi = (char *)_if.rsp + 8;
 
 	hex_dump(_if.rsp, _if.rsp, USER_STACK - (uint64_t)_if.rsp, true); // user stack을 16진수로 프린트
-	// ~ Argument Passing
+	//  ~ Argument Passing
 
 	/* If load failed, quit. */
 	palloc_free_page(file_name);
@@ -249,19 +249,19 @@ int process_exec(void *f_name)
  * does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-	struct thread *child = get_child_process(child_tid);
+	// struct thread *child = get_child_process(child_tid);
+	// if (child == NULL)
+	// 	return -1;
 
-	if (child == NULL)
-		return -1;
+	// sema_down(&child->exit_sema);
+	// int exit_status = child->exit_status; // 부모님, 저 이제 끝났습니다
+	// list_remove(&child->child_elem);	  // 그래? 그럼 이제 넌 호적에서 파야겠다
+	// sema_up(&child->wait_sema);			  // 아 세마도 뺏어야지
 
-	sema_down(&child->wait_sema); // wait until the child's done. (context switch!)
-
-	int exit_status = child->exit_status; // 부모님, 저 이제 끝났습니다
-	list_remove(&child->child_elem); // 그래? 그럼 이제 넌 호적에서 파야겠다
-
-	sema_up(&child->exit_sema); // 아 세마도 뺏어야지
-
-	return exit_status;
+	// return exit_status;
+	for (int i = 0; i < 1000000000000; i++)
+	{
+	}
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -270,7 +270,9 @@ void process_exit(void)
 	struct thread *curr = thread_current();
 
 	for (int i = 0; i < FDCOUNT_LIMIT; i++)
-		close(i);								// 프로세스 종료시 해당 프로세스의 fdt의 모든 값을 0으로 만든다
+	{
+		close(i); // 프로세스 종료시 해당 프로세스의 fdt의 모든 값을 0으로 만든다
+	}
 	palloc_free_multiple(curr->fdt, FDT_PAGES); // fd table 메모리 해제
 
 	file_close(curr->running);
@@ -376,7 +378,6 @@ struct ELF64_PHDR
 #define ELF ELF64_hdr
 #define Phdr ELF64_PHDR
 
-struct thread *get_child_process(int pid);
 static bool setup_stack(struct intr_frame *if_);
 static bool validate_segment(const struct Phdr *, struct file *);
 static bool load_segment(struct file *file, off_t ofs, uint8_t *upage,
@@ -493,6 +494,9 @@ load(const char *file_name, struct intr_frame *if_)
 			break;
 		}
 	}
+
+	t->running = file;
+	file_deny_write(file); // 현재 오픈한 파일에 접근 못하게 하기
 
 	/* Set up stack. */
 	if (!setup_stack(if_))
