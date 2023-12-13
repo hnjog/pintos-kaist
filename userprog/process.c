@@ -82,11 +82,16 @@ initd (void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_) {
-	/* Clone current thread to new thread.*/
-
+	// fork로 현재 thread를 
+	// 부모로 포함시키는 '자식 스레드'를 생성
 	struct thread *parent = thread_current ();
+
+	// 현재의 thread의 parent_f에 인자로 넘어온
+	// 인터럽트 프레임을 복사해둔다
+	// 이후 내부에서 다시 복사해줄 예정
 	memcpy(&parent->parent_f, if_, sizeof(struct intr_frame));
 
+	// create 내부에서 자식으로 들어간다
 	tid_t tid = thread_create (name, PRI_DEFAULT, __do_fork, parent);
 
 	if (tid == TID_ERROR)
@@ -94,12 +99,15 @@ process_fork (const char *name, struct intr_frame *if_) {
 		return TID_ERROR;
 	}
 
+	// 바로 넣어주었긴 하여도
+	// 혹시 모르니 null 체크
 	struct thread *child = find_child_By_tid(tid);
 	if(child == NULL)
 	{
 		return TID_ERROR;
 	}
 
+	// fork가 완료될때까지 기다린다
 	sema_down(&child->forkSema);
 
 	if(child->exit_Status == -1)
@@ -115,6 +123,8 @@ process_fork (const char *name, struct intr_frame *if_) {
  * pml4_for_each. This is only for the project 2. */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
+	// 부모의 page table entry를 복사한다
+	// 일종의 주소 공간 복사 (page 영역을 복사)
 	struct thread *current = thread_current ();
 	struct thread *parent = (struct thread *) aux;
 	void *parent_page;
@@ -167,13 +177,16 @@ __do_fork (void *aux) {
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
-	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
+	// 부모 스레드(aux 로 넘겨 받음)에
+	// 저장해둔 parent_f를 여기에 넣어준다
 	struct intr_frame *parent_if = &parent->parent_f;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
+	// 지역변수 인터럽트 프레임을 복사해준다
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
 
+	// 리턴값 설정
 	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
@@ -187,6 +200,10 @@ __do_fork (void *aux) {
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
+	// page table을 복사하기 위함
+	// 각각의 page에서 duplicate pte를 실행한다 
+	// fork 할 때, 자식 스레드(프로세스)는 부모의
+	// 주소 공간을 복사하므로
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
 		goto error;
 #endif
@@ -197,19 +214,27 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
+	// fdt 에 대한 정보 복사
 	for (int i = 2; i < MAX_FD_VALUE; i++) 
 	{
+		// null 인 경우는 continue
 		struct file *file = parent->fdt[i];
 		if (file == NULL) 
 		{
 			continue;
 		}
 
+		// 그대로 대입하면 file 내부의 inode의 open_cnt가 변하지 않기에
+		// file_duplicate를 사용하여 해당 수치를 올려주어야
+		// 같은 파일의 open_cnt가 올라간다
 		file = file_duplicate(file);
 		current->fdt[i] = file;
 	}
 
 	current->focusing_fd = parent->focusing_fd;
+
+	// fork세마를 호출하여
+	// 부모 스레드에게 fork 세팅이 끝남을 알려준다
 	sema_up(&current->forkSema);
 
 	process_init ();
@@ -218,7 +243,9 @@ __do_fork (void *aux) {
 	if (succ)
 		do_iret (&if_);
 error:
-	//thread_exit ();
+	// 잘못된 경우, error 세팅을 해주고
+	// fork를 해제한다
+	// 이후 exit으로 종료 처리를 진행
 	current->exit_Status = TID_ERROR;
 	sema_up(&current->forkSema);
 	exit(TID_ERROR);

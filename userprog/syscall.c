@@ -84,6 +84,9 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
+	// 시스템 콜이 호출된 시점의 인터럽트 프레임을 스택에 push하고,
+	// 시스템 핸들러로 제어권을 옮기는 상태이다
+	// (by systemcall_entry)
 	if (f == NULL)
 	{
 		printf("Is Wrong Data forwarded!\n");
