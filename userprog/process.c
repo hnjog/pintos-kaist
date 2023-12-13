@@ -57,7 +57,10 @@ tid_t process_create_initd(const char *file_name)
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create(name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
+	{
 		palloc_free_page(fn_copy);
+	}
+
 	return tid;
 }
 
@@ -81,8 +84,22 @@ initd(void *f_name)
 tid_t process_fork(const char *name, struct intr_frame *if_ UNUSED)
 {
 	/* Clone current thread to new thread.*/
-	return thread_create(name,
-						 PRI_DEFAULT, __do_fork, thread_current());
+	// return thread_create(name, PRI_DEFAULT, __do_fork, thread_current());
+	struct thread *curr = thread_current();
+
+	memcpy(&curr->parent_if, if_, sizeof(struct intr_frame));
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, curr);
+	if (tid == TID_ERROR)
+	{
+		return TID_ERROR;
+	}
+	struct thread *child = get_child_with_pid(tid);
+	sema_down(&child->fork_sema);
+	if (child->exit_status == -1)
+	{
+		return TID_ERROR;
+	}
+	return tid;
 }
 
 #ifndef VM
@@ -98,22 +115,38 @@ duplicate_pte(uint64_t *pte, void *va, void *aux)
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	if (is_kernel_vaddr(va))
+	{
+		return true;
+	}
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page(parent->pml4, va);
+	if (parent_page == NULL)
+	{
+		return false;
+	}
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO);
+	if (newpage == NULL)
+	{
+		return false;
+	}
 
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page(current->pml4, va, newpage, writable))
 	{
 		/* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
@@ -133,8 +166,12 @@ __do_fork(void *aux)
 	struct intr_frame *parent_if;
 	bool succ = true;
 
+	parent_if = &parent->parent_if;
+
 	/* 1. Read the cpu context to local stack. */
 	memcpy(&if_, parent_if, sizeof(struct intr_frame));
+
+	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -149,6 +186,7 @@ __do_fork(void *aux)
 #else
 	if (!pml4_for_each(parent->pml4, duplicate_pte, parent))
 		goto error;
+
 #endif
 
 	/* TODO: Your code goes here.
@@ -156,14 +194,35 @@ __do_fork(void *aux)
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
+	if (parent->fd_idx == FD_MAX)
+	{
+		goto error;
+	}
 
+	for (int i = 2; i < FD_MAX; i++)
+	{
+		struct file *file = parent->fd_table[i];
+		if (file == NULL)
+			continue;
+		// if 'file' is already duplicated in child don't duplicate again but share it
+
+		file = file_duplicate(file);
+		current->fd_table[i] = file;
+	}
+	current->fd_idx = parent->fd_idx;
+
+	sema_up(&current->fork_sema);
 	process_init();
 
 	/* Finally, switch to the newly created process. */
 	if (succ)
+	{
 		do_iret(&if_);
+	}
 error:
-	thread_exit();
+	current->exit_status = TID_ERROR;
+	sema_up(&current->fork_sema);
+	exit(TID_ERROR);
 }
 
 /* Switch the current execution context to the f_name.
@@ -233,10 +292,22 @@ int process_wait(tid_t child_tid UNUSED)
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	for (int i = 0; i < 10000000; i++)
+
+	struct thread *child = get_child_with_pid(child_tid);
+
+	if (child == NULL)
 	{
+		return -1;
 	}
-	return -1;
+
+	sema_down(&child->wait_sema);
+
+	int exit_status = child->exit_status;
+
+	list_remove(&child->child_elem);
+
+	sema_up(&child->free_sema);
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -247,14 +318,21 @@ void process_exit(void)
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	int idx = curr->fd_idx;
-	for (idx; idx >= 2; idx--)
+	int idx = curr->fd_idx - 1;
+	for (idx; idx >= 0; idx--)
 	{
 		file_close(curr->fd_table[idx]);
 		curr->fd_table[idx] = NULL;
 	}
 
+	palloc_free_multiple(curr->fd_table, 3);
+
+	file_close(curr->running);
+
 	process_cleanup();
+
+	sema_up(&curr->wait_sema);
+	sema_down(&curr->free_sema);
 }
 
 /* Free the current process's resources. */
@@ -462,12 +540,13 @@ load(const char *file_name, struct intr_frame *if_)
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	t->running = file;
+	file_deny_write(file);
 
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close(file);
 	return success;
 }
 
@@ -736,7 +815,7 @@ void argument_stack(char **argv, int argc, void **rsp)
 struct file *process_get_file(int fd)
 {
 	struct thread *curr = thread_current();
-	if (fd < 0 || fd >= 64)
+	if (fd < 0 || fd >= FD_MAX)
 	{
 		return NULL;
 	}
@@ -748,11 +827,11 @@ int process_add_file(struct file *f)
 	struct thread *curr = thread_current();
 	struct file **fdt = curr->fd_table;
 
-	while (curr->fd_idx < 64 && fdt[curr->fd_idx])
+	while (curr->fd_idx < FD_MAX && fdt[curr->fd_idx])
 	{
 		curr->fd_idx++;
 	}
-	if (curr->fd_idx >= 64)
+	if (curr->fd_idx >= FD_MAX)
 	{
 		return -1;
 	}
@@ -764,7 +843,7 @@ void process_close_file(int fd)
 {
 	struct thread *curr = thread_current();
 
-	if (fd < 0 || fd >= 64)
+	if (fd < 0 || fd >= FD_MAX)
 	{
 		return;
 	}

@@ -14,6 +14,7 @@
 #include "filesys/file.h"
 #include "threads/synch.h"
 #include "userprog/process.h"
+#include "threads/palloc.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -62,6 +63,18 @@ void syscall_handler(struct intr_frame *f UNUSED)
 		break;
 	case SYS_EXIT:
 		exit(f->R.rdi);
+		break;
+	case SYS_FORK:
+		f->R.rax = fork(f->R.rdi, f);
+		break;
+	case SYS_EXEC:
+		if (exec(f->R.rdi) == -1)
+		{
+			exit(-1);
+		}
+		break;
+	case SYS_WAIT:
+		f->R.rax = process_wait(f->R.rdi);
 		break;
 	case SYS_CREATE:
 		f->R.rax = create(f->R.rdi, f->R.rsi);
@@ -258,4 +271,32 @@ void check_address(void *addr)
 	{
 		exit(-1);
 	}
+}
+
+int exec(char *file_name)
+{
+	check_address(file_name);
+	int file_size = strlen(file_name) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO);
+	if (fn_copy == NULL)
+	{
+		exit(-1);
+	}
+	strlcpy(fn_copy, file_name, file_size); // file 이름만 복사
+	if (process_exec(fn_copy) == -1)
+	{
+		return -1;
+	}
+	NOT_REACHED();
+	return 0;
+}
+
+tid_t fork(const char *thread_name, struct intr_frame *f)
+{
+	return process_fork(thread_name, f);
+}
+
+int wait(tid_t pid)
+{
+	process_wait(pid);
 }

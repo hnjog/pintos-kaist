@@ -215,8 +215,9 @@ tid_t thread_create(const char *name, int priority,
 	test_max_priority();
 
 	/* file descriptor init */
-	t->fd_table = palloc_get_page(PAL_ZERO);
+	t->fd_table = palloc_get_multiple(PAL_ZERO, 3);
 	t->fd_idx = 2;
+	list_push_back(&thread_current()->child_list, &t->child_elem);
 
 	return tid;
 }
@@ -452,6 +453,12 @@ init_thread(struct thread *t, const char *name, int priority)
 	t->recent_cpu = 0;
 	t->nice = 0;
 	list_push_back(&all_list, &t->a_elem);
+
+	/* project 2 userprog */
+	list_init(&t->child_list);
+	sema_init(&t->fork_sema, 0);
+	sema_init(&t->free_sema, 0);
+	sema_init(&t->wait_sema, 0);
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -697,6 +704,11 @@ bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *au
 /* compare priority between running thread and 1st ready_list thread */
 void test_max_priority(void)
 {
+	if (intr_context() == true)
+	{
+		return;
+	}
+
 	struct list_elem *e = list_begin(&ready_list);
 
 	if (e != list_end(&ready_list))
@@ -825,4 +837,19 @@ void update_priority(void)
 	// 		t->priority = tmp;
 	// 	}
 	// }
+}
+
+struct thread *get_child_with_pid(int pid)
+{
+	struct thread *cur = thread_current();
+	struct list *child_list = &cur->child_list;
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		struct thread *t = list_entry(e, struct thread, child_elem);
+		if (t->tid == pid)
+		{
+			return t;
+		}
+	}
+	return NULL;
 }

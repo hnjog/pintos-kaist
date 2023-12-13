@@ -9,6 +9,8 @@
 #include "vm/vm.h"
 #endif
 
+#include "threads/synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
 {
@@ -114,6 +116,18 @@ struct thread
 	struct file **fd_table;
 	int fd_idx;
 
+	/* for fork() */
+	struct intr_frame parent_if;
+	struct semaphore fork_sema; // fork한 child의 load를 기다리는 용도
+	struct list child_list;		// parent가 가진 child_list
+	struct list_elem child_elem;
+
+	struct semaphore wait_sema;
+	struct semaphore free_sema;
+	struct file *running;
+	// int stdin_count;
+	// int stdout_count;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4; /* Page map level 4 */
@@ -176,3 +190,6 @@ void update_load_avg(void);
 void update_recent_cpu(void);
 void update_priority(void);
 struct list all_list;
+
+struct thread *get_child_with_pid(int pid);
+#define FD_MAX 512 * 3
