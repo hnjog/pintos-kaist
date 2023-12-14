@@ -317,6 +317,8 @@ process_wait (tid_t child_tid) {
 		return -1;
 	}
 
+	// fork를 해도 부모 thread에서 wait 호출이 안될 수 있음
+
 	sema_down (&child->waitSema);
 	list_remove (&child->childElem);
 	int exit_status = child->exit_Status;
@@ -349,6 +351,9 @@ process_exit (void) {
 	process_cleanup();
 
 	sema_up(&curr->waitSema);
+
+	// 부모 thread에서 up을 해줘야 함
+	// 부모 thread에서 wait를 호출해준다는 보장이 없음
 	sema_down (&curr->freeSema);
 }
 
