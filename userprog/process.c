@@ -267,6 +267,7 @@ process_exec (void *f_name) {
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
 	/* We first kill the current context */
+	// 이게 문제인가?
 	process_cleanup ();
 
 	/* project 2: argument passing */
@@ -288,6 +289,7 @@ process_exec (void *f_name) {
 	//hex_dump(_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
 	/* project 2: argument passing */
 
+	palloc_free_page (file_name);
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
