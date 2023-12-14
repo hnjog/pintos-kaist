@@ -9,6 +9,8 @@
 #include "vm/vm.h"
 #endif
 
+#include "threads/synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
 {
@@ -95,16 +97,36 @@ struct thread
 
 	int64_t wakeup_tick; /* tick till wake up */
 
-	/* donation 이후 우선순위를 초기화하기 위해 초기 우선순위 값을 저장할 필드
-	해당 쓰레드가 대기하고 있는 lock자료구조의 주소를 저장할 필드
-	multiple donation을 고려하기 위한 리스트 추가, 해당 리스트를 위한 elem도 추가 */
+	/* for priority donation */
 	int origin_priority;
 	struct lock *lock_need;
 	struct list donator_list;
 	struct list_elem d_elem;
 
+	struct list_elem a_elem;
+
+	int nice;
+	int recent_cpu;
+
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem; /* List element. */
+
+	/* project 2 user program */
+	int exit_status;
+	struct file **fd_table;
+	int fd_idx;
+
+	/* for fork() */
+	struct intr_frame parent_if;
+	struct semaphore fork_sema; // fork한 child의 load를 기다리는 용도
+	struct list child_list;		// parent가 가진 child_list
+	struct list_elem child_elem;
+
+	struct semaphore wait_sema;
+	struct semaphore free_sema;
+	struct file *running;
+	// int stdin_count;
+	// int stdout_count;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -163,3 +185,11 @@ int64_t next_tick_to_awake;
 
 void test_max_priority(void);
 bool cmp_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void update_load_avg(void);
+void update_recent_cpu(void);
+void update_priority(void);
+struct list all_list;
+
+struct thread *get_child_with_pid(int pid);
+#define FD_MAX 512 * 3
