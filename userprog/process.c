@@ -631,6 +631,14 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+/*
+주소 UPAGE의 FILE에서 오프셋 OFS로 시작하는 세그먼트를 로드합니다. 
+총 가상 메모리의 READ_BYTES + ZERO_BYTES 바이트는 다음과 같이 초기화됩니다:
+- UPAGE의 READ_BITES 바이트는 오프셋 OFS에서 시작하는 FILE에서 읽어야 합니다.
+- UPAGE + READ_BYTES의 ZERO_BYTES 바이트는 0이어야 합니다.
+WRITABLE이 true이면 이 기능에 의해 초기화된 페이지는 사용자 프로세스에 의해 쓰기 가능해야 합니다. 그렇지 않으면 읽기 전용입니다.
+성공하면 true를 반환하고, 메모리 할당 오류 또는 디스크 읽기 오류가 발생하면 false를 반환합니다.
+*/
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {

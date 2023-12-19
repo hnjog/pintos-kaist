@@ -228,7 +228,7 @@ tid_t thread_create(const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	//t->fdt = (struct file **)palloc_get_page(PAL_ZERO);
-	t->fdt = palloc_get_multiple(PAL_ZERO,3);
+	t->fdt = palloc_get_multiple(PAL_ZERO,3); //| PAL_USER
 	if(t->fdt == NULL)
 		return TID_ERROR;
 

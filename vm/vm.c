@@ -27,6 +27,10 @@ page_get_type (struct page *page) {
 	switch (ty) {
 		case VM_UNINIT:
 			return VM_TYPE (page->uninit.type);
+		// case VM_ANON:
+		// 	return VM_TYPE (page->anon.type);
+		// case VM_FILE:
+		// 	return VM_TYPE (page->file.type);
 		default:
 			return ty;
 	}
@@ -53,6 +57,11 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		/*
+			페이지를 만들고 VM 유형에 따라 이니셜을 가져온 다음
+			uninit_new를 호출하여 "uninit" 페이지 구조를 만듭니다.
+			uninit_new를 호출한 후 필드를 수정해야 합니다.
+		*/
 
 		/* TODO: Insert the page into the spt. */
 	}
@@ -61,6 +70,8 @@ err:
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
+// spt(supplemental_page_table)에서 가상 주소를 찾고, 페이지를 반환하기
+// 못찾으면 NULL 반환
 struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
