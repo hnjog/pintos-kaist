@@ -10,4 +10,13 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (struct thread *next);
 
+#ifdef VM
+struct loadArgs
+{
+    struct file* file;
+    off_t fileOfs;
+    size_t readByte;
+};
+#endif
+
 #endif /* userprog/process.h */

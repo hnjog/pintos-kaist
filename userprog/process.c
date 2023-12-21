@@ -721,11 +721,45 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+/*
+load_segment에서 vm_alloc_page_with_initializer의 
+네 번째 인수로 lazy_load_segment가 제공되는 것을 보셨을 것입니다. 
+이 함수는 실행 파일의 페이지 이니셜라이저이며 페이지 오류 발생 시 호출됩니다. 
+이 함수는 페이지 구조체와 aux를 인자로 받습니다. 
+aux는 load_segment에서 설정한 정보입니다. 
+이 정보를 사용하여 세그먼트를 읽을 파일을 찾고 결국 세그먼트를 메모리로 읽어야 합니다.
+*/
 static bool
 lazy_load_segment (struct page *page, void *aux) {
-	/* TODO: Load the segment from the file */
-	/* TODO: This called when the first page fault occurs on address VA. */
-	/* TODO: VA is available when calling this function. */
+	/*
+	파일에서 세그먼트 로드 
+	주소 VA에서 첫 페이지 장애가 발생할 때 호출됩니다.
+	이 기능을 호출할 때 VA를 사용할 수 있습니다.
+
+	aux를 이용하여 세그먼트를 읽을 파일을 찾아
+	메모리로 읽어야 함
+	*/
+
+	// 이거 다 쓰고 해제해줄것
+	struct loadArgs* largp = (struct loadArgs*)(aux);
+
+	struct file* file = largp->file;
+	off_t fileOfs = largp->fileOfs;
+    size_t readByte = largp->readByte;
+    size_t zeroByte = PGSIZE - largp->readByte;
+	void* kpage = page->frame->kva;
+
+	file_seek(file,fileOfs);
+	if (file_read(file, kpage,readByte) != (int) readByte) 
+	{
+		palloc_free_page(kpage);
+		free(largp);
+		return false;
+	}
+	memset (kpage + readByte, 0, zeroByte);
+
+	free(largp);
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -757,15 +791,34 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		// aux 인자를 lazy_load_segment에 전달할 인자로 설정해야 한다
+		// file과 offset을 이용해야 한다
+		struct loadArgs* largP = (struct loadArgs*)malloc(sizeof(struct loadArgs));
+		if(largP == NULL)
+		{
+			return false;
+		}
+
+		largP->file = file;
+		largP->fileOfs = ofs;
+		largP->readByte = page_read_bytes;
+
+		void *aux = largP;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
+		{
+			free(largP);
 			return false;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		// 나중에 읽어줄 거라
+		// 해당 시점에서의 ofs가 따로 필요함
+		// '반복문'을 돌면서 page를 따로 할당할 수 있음
+		ofs += page_read_bytes;
 	}
 	return true;
 }
@@ -776,10 +829,24 @@ setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
+	/* 
+		저장 정보를 위한 보조용 비트 플래그 마커,
+		값이 int 내부라면 마커를 추가 가능함
+		(enum이 C에서는 int형이기에 여러 enum type 옵션을 or 연산자로 비트 체크)
+	 */
 	/* TODO: Your code goes here */
+	
+	// vm_marker 0 세팅하여 'stack'프레임에 대한 표시를 해준다
+	success = vm_alloc_page(VM_ANON | VM_MARKER_0,stack_bottom,true);
+	if(success == true)
+	{
+		if_->rsp = USER_STACK;
+	}
+
+	if(vm_claim_page(stack_bottom) == false)
+	{
+		return false;
+	}
 
 	return success;
 }

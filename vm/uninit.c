@@ -8,6 +8,13 @@
  * function.
  * */
 
+/*
+모든 페이지는 uninit 페이지로 생성됩니다. 
+첫 페이지 오류가 발생하면 처리기 체인에서 uninit_initize(page->operations.swap_in)를 호출합니다.
+uninit_initialize 함수는 페이지 개체를 초기화하여 페이지를 특정 페이지 개체(non, file, page_cache)로 변환하고 
+vm_alloc_page_with_initializer 함수에서 전달된 초기화 콜백을 호출합니다.
+*/
+
 #include "vm/vm.h"
 #include "vm/uninit.h"
 

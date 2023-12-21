@@ -25,12 +25,13 @@
                 //"-T", "60",
                 "-m", "20",
                 "--fs-disk=10",
-                "-p", "tests/userprog/args-single:args-single",
+                "-p", "tests/filesys/base/syn-read:syn-read",
+                "-p", "tests/filesys/base/child-syn-read:child-syn-read",
                 "--swap-disk=4",
                 "--",
                 "-q",
                 "-f", "run",
-                "args-single onearg"
+                "syn-read"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
