@@ -289,6 +289,8 @@ process_exec (void *f_name) {
 	//hex_dump(_if.rsp, _if.rsp, USER_STACK-_if.rsp, true);
 	/* project 2: argument passing */
 
+	thread_current()->user_rsp = _if.rsp;
+
 	palloc_free_page (file_name);
 	/* Start switched process. */
 	do_iret (&_if);
@@ -729,7 +731,7 @@ load_segment에서 vm_alloc_page_with_initializer의
 aux는 load_segment에서 설정한 정보입니다. 
 이 정보를 사용하여 세그먼트를 읽을 파일을 찾고 결국 세그먼트를 메모리로 읽어야 합니다.
 */
-static bool
+bool
 lazy_load_segment (struct page *page, void *aux) {
 	/*
 	파일에서 세그먼트 로드 
@@ -753,12 +755,10 @@ lazy_load_segment (struct page *page, void *aux) {
 	if (file_read(file, kpage,readByte) != (int) readByte) 
 	{
 		palloc_free_page(kpage);
-		free(largp);
 		return false;
 	}
 	memset (kpage + readByte, 0, zeroByte);
 
-	free(largp);
 	return true;
 }
 
@@ -834,24 +834,21 @@ setup_stack (struct intr_frame *if_) {
 		값이 int 내부라면 마커를 추가 가능함
 		(enum이 C에서는 int형이기에 여러 enum type 옵션을 or 연산자로 비트 체크)
 	 */
-	/* TODO: Your code goes here */
 	
 	// vm_marker 0 세팅하여 'stack'프레임에 대한 표시를 해준다
-	success = vm_alloc_page(VM_ANON | VM_MARKER_0,stack_bottom,true);
-	if(success == true)
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0,stack_bottom,true) == true)
 	{
-		if_->rsp = USER_STACK;
-	}
-
-	if(vm_claim_page(stack_bottom) == false)
-	{
-		return false;
+		success = vm_claim_page(stack_bottom);
+		if(success == true)
+		{
+			if_->rsp = USER_STACK;
+			thread_current()->stack_bottom = stack_bottom;
+		}
 	}
 
 	return success;
 }
 #endif /* VM */
-
 
 void tokenizer(char *file_name, char **argv, int *argc) {
 	char *token, *save_ptr;
@@ -901,4 +898,22 @@ void stacker(char **argv, int argc, struct intr_frame *if_) {
 	size_t voidFPtrSize = sizeof(void(*)());
 	if_->rsp -= voidFPtrSize;
 	memset((void*)(if_->rsp),NULL,voidFPtrSize);
+}
+
+struct file* process_get_file(int fd)
+{
+	if(fd < 0 || fd >= MAX_FD_VALUE)
+	{
+		return NULL;
+	}
+
+    struct thread *curr = thread_current();
+    struct file* fd_file = curr->fdt[fd];
+
+    if (fd_file != NULL)
+	{
+        return fd_file;
+	}
+
+	return NULL;
 }

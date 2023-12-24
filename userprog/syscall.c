@@ -38,19 +38,54 @@ int write (int fd, const void *buffer, unsigned length);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap(void *addr);
 
 int dup2(int oldfd, int newfd);
 
 // util func
 // 주소 값이 '유저 영역' 값인지 확인하고 벗어난 영역이라면 프로세스 종료
-void check_address(void* addr)
-{
-	if(addr == NULL ||
-	 is_user_vaddr(addr) == false ||
-	 pml4_get_page(thread_current()->pml4,addr) == NULL) // addr에 해당하는 물리주소 검색 실패 시
-	{
+// void check_address(void* addr)
+// {
+// 	if(addr == NULL ||
+// 	 is_user_vaddr(addr) == false ||
+// 	 pml4_get_page(thread_current()->pml4,addr) == NULL) // addr에 해당하는 물리주소 검색 실패 시
+// 	{
+// 		exit(-1);
+// 	}
+// }
+
+struct page *check_address(void *addr) {
+	if (is_kernel_vaddr(addr) || addr == NULL)
 		exit(-1);
-	}
+
+	return spt_find_page(&thread_current()->spt, addr);
+}
+
+void validate_buffer(void *buffer, size_t size, bool to_write) {
+
+    if (buffer == NULL)
+        exit(-1);
+
+	// 이미 사용자 영역 내에 존재한다
+	// 즉 적절한 위치 내부에 존재함
+    if (buffer <= USER_STACK && buffer >= thread_current()->user_rsp)
+        return;
+
+    void *start_addr = pg_round_down(buffer);
+    void *end_addr = pg_round_down(buffer + size);
+
+    ASSERT(start_addr <= end_addr);
+    for (void *addr = end_addr; addr >= start_addr; addr -= PGSIZE) {
+        struct page *pg = check_address(addr);
+        if (pg == NULL) {
+            exit(-1);
+        }
+        
+        if (pg->isWritable == false && to_write == true) {
+            exit(-1);
+        }
+    }
 }
 
 /* System call.
@@ -96,7 +131,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 	struct thread* curr = thread_current();
 
-	check_address((void*)(f->rsp));
+	//check_address((void*)(f->rsp));
+#ifdef VM
+	thread_current()->user_rsp = f->rsp;
+#endif
 
 	switch (f->R.rax)
 	{
@@ -188,8 +226,18 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			close(fd);
 		}
 		break;
+		case SYS_MMAP:
+		{
+			f->R.rax = mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+		}
+		break;
+		case SYS_MUNMAP:
+		{
+			munmap(f->R.rdi);
+		}
+		break;
 
-	default:
+		default:
 		{
 			printf("Is Wrong Rax Data forwarded!\n");
 			thread_exit();
@@ -260,7 +308,9 @@ bool remove (const char *file)
 int open (const char *file)
 {
 	check_address(file);
+	lock_acquire(&filesys_lock);
 	struct file* targetFile = filesys_open(file);
+	lock_release(&filesys_lock);
 
 	if(targetFile == NULL)
 	{
@@ -300,9 +350,10 @@ int read (int fd, void *buffer, unsigned length)
 	// 들어와있는 f->rsp 자체는 유효한 주소지만
 	// buffer 의 위치와
 	// buffer 가 끝나는 부분이 유효한 주소인지 확인한다
-	check_address(buffer);
-	check_address(buffer + length);
+	// check_address(buffer);
+	// check_address(buffer + length);
 
+	validate_buffer(buffer,length,true);
 	int reads = 0;
 
 	// read 에서 stdout를 찾고 있다
@@ -346,8 +397,9 @@ int read (int fd, void *buffer, unsigned length)
 }
 int write (int fd, const void *buffer, unsigned length)
 {
-	check_address(buffer);
-	check_address(buffer + length);
+	// check_address(buffer);
+	// check_address(buffer + length);
+	validate_buffer(buffer,length,false);
 
 	if(fd == 0)
 	{
@@ -436,4 +488,46 @@ void close (int fd)
 
 	curr->fdt[fd] = NULL;
 	file_close(targetFile);
+}
+void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
+{
+	if (offset % PGSIZE != 0)
+	{
+		return NULL;
+	}
+
+	if (pg_round_down(addr) != addr ||
+		is_kernel_vaddr(addr) ||
+		addr == NULL ||
+		(long long)length <= 0)
+	{
+		return NULL;
+	}
+
+	// console input, output은 mapping x
+	if (fd == 0 || fd == 1)
+	{
+		exit(-1);
+	}
+
+	// 이미 page에 존재하는 경우는 안됨
+	if (spt_find_page(&thread_current()->spt, addr) != NULL)
+	{
+		return NULL;
+	}
+
+	struct file *target = process_get_file(fd);
+	if (target == NULL)
+	{
+		return NULL;
+	}
+
+	void *mapP = do_mmap(addr, length, writable, target, offset);
+
+	return mapP;
+}
+
+void munmap(void *addr)
+{
+	do_munmap(addr);
 }

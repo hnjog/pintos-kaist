@@ -70,6 +70,14 @@ uninit_initialize (struct page *page, void *kva) {
 static void
 uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
-	/* TODO: Fill this function.
-	 * TODO: If you don't have anything to do, just return. */
+	if (page->operations == &uninit_ops)
+	{
+		struct uninit_page *uninit = &page->uninit;
+		
+		if (uninit->aux != NULL)
+		{
+			file_close(uninit->aux);
+			uninit->aux = NULL;
+		}
+	}
 }

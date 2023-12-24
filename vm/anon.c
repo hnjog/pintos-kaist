@@ -28,9 +28,12 @@ vm_anon_init (void) {
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
+	struct uninit_page *uninit = &page->uninit;
+    memset(uninit, 0, sizeof(struct uninit_page));
 	page->operations = &anon_ops;
 
 	struct anon_page *anon_page = &page->anon;
+	anon_page->swap_index = -1;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -49,4 +52,8 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	if (anon_page != NULL) {
+		file_close(anon_page);
+		anon_page = NULL;
+	}
 }

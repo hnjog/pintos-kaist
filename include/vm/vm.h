@@ -47,11 +47,7 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
-	bool isDirty;
-	bool isAccessed;
 	bool isWritable;
-	bool isPresented;
-	bool isUserUsing; // user/Supervisor
 
 	struct hash_elem spt_hash_elem;
 
