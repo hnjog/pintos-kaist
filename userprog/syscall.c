@@ -55,7 +55,8 @@ int dup2(int oldfd, int newfd);
 // 	}
 // }
 
-struct page *check_address(void *addr) {
+struct page *check_address(void *addr) 
+{
 	if (is_kernel_vaddr(addr) || addr == NULL)
 	{
 		exit(-1);
@@ -67,7 +68,9 @@ struct page *check_address(void *addr) {
 void validate_buffer(void *buffer, size_t size, bool to_write) {
 
     if (buffer == NULL)
+	{
         exit(-1);
+	}
 
 	// 이미 사용자 영역 내에 존재한다
 	// 즉 적절한 위치 내부에 존재함

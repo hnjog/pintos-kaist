@@ -95,7 +95,7 @@ file_backed_destroy (struct page *page)
 	{
 		struct file_page *file_page UNUSED = &page->file;
 		struct loadArgs *aux = (struct loadArgs *)page->uninit.aux;
-		
+
 	}
 }
 
@@ -162,25 +162,30 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 
 /* Do the munmap */
 void
-do_munmap (void *addr) 
+do_munmap (void *addr)
 {
-	struct thread* curr = thread_current();
+	struct thread *curr = thread_current();
 	while (true)
 	{
-		struct page* targetPage = spt_find_page(&curr->spt,addr);
-		if(targetPage == NULL)
+		struct page *targetPage = spt_find_page(&curr->spt, addr);
+		if (targetPage == NULL)
 			return;
 
-		struct loadArgs* aux = (struct loadArgs*)targetPage->uninit.aux;
+		struct loadArgs *aux = (struct loadArgs *)targetPage->uninit.aux;
 
-		// dirty check
-		if(pml4_is_dirty(curr->pml4,targetPage->va) == true)
+		// null 인 경우 아래에서 null 참조가 일어나게 된다
+		if (aux != NULL)
 		{
-			file_write_at(aux->file,addr,aux->readByte,aux->fileOfs);
-			pml4_set_dirty(curr->pml4,targetPage->va,false);
+			// dirty check
+			if (pml4_is_dirty(curr->pml4, targetPage->va) == true)
+			{
+				file_write_at(aux->file, addr, aux->readByte, aux->fileOfs);
+				pml4_set_dirty(curr->pml4, targetPage->va, false);
+			}
+
+			pml4_clear_page(curr->pml4, targetPage->va);
 		}
 
-		pml4_clear_page(curr->pml4,targetPage->va);
 		addr += PGSIZE;
 	}
 }

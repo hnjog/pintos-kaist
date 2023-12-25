@@ -67,9 +67,9 @@ process_create_initd (const char *file_name) {
 /* A thread function that launches first user process. */
 static void
 initd (void *f_name) {
-#ifdef VM
-	supplemental_page_table_init (&thread_current ()->spt);
-#endif
+// #ifdef VM
+// 	supplemental_page_table_init (&thread_current ()->spt);
+// #endif
 
 	process_init ();
 
@@ -269,6 +269,10 @@ process_exec (void *f_name) {
 	/* We first kill the current context */
 	// 이게 문제인가?
 	process_cleanup ();
+
+#ifdef VM
+	supplemental_page_table_init (&thread_current ()->spt);
+#endif
 
 	/* project 2: argument passing */
     char *argv[MAX_ARGS];

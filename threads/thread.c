@@ -239,6 +239,10 @@ tid_t thread_create(const char *name, int priority,
 	struct thread* curr = thread_current();
 	list_push_back(&curr->childList,&t->childElem);
 
+#ifdef VM
+	t->stack_bottom = NULL;
+	t->user_rsp = NULL;
+#endif
 	/* Add to run queue. */
 	thread_unblock(t);
 
