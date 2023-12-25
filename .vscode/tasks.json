@@ -25,13 +25,12 @@
                 //"-T", "60",
                 "-m", "20",
                 "--fs-disk=10",
-                "-p", "tests/vm/mmap-exit:mmap-exit",
-                "-p", "tests/vm/child-mm-wrt:child-mm-wrt",
+                "-p", "tests/vm/mmap-shuffle:mmap-shuffle",
                 "--swap-disk=4",
                 "--",
                 "-q",
                 "-f", "run",
-                "mmap-exit"
+                "mmap-shuffle"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

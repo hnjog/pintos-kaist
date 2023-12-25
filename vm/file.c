@@ -139,7 +139,7 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 		largP->readByte = page_read_bytes;
 
 		void *aux = largP;
-		if (!vm_alloc_page_with_initializer (VM_ANON, addr,
+		if (!vm_alloc_page_with_initializer (VM_FILE, addr,
 					writable, lazy_load_segment, aux))
 		{
 			free(largP);
