@@ -68,15 +68,21 @@ uninit_initialize (struct page *page, void *kva) {
  * exit, which are never referenced during the execution.
  * PAGE will be freed by the caller. */
 static void
-uninit_destroy (struct page *page) {
-	struct uninit_page *uninit UNUSED = &page->uninit;
+uninit_destroy (struct page *page) 
+{
+	if(page == NULL)
+	{
+		return;
+	}
+
 	if (page->operations == &uninit_ops)
 	{
 		struct uninit_page *uninit = &page->uninit;
 		
 		if (uninit->aux != NULL)
 		{
-			file_close(uninit->aux);
+			//file_close(uninit->aux);
+			free(uninit->aux);
 			uninit->aux = NULL;
 		}
 	}

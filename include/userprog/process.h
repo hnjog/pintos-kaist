@@ -19,4 +19,6 @@ struct loadArgs
 
 bool lazy_load_segment (struct page *page, void *aux);
 
+struct file* process_get_file(int fd);
+
 #endif /* userprog/process.h */

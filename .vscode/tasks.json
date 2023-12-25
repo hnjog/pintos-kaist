@@ -25,13 +25,12 @@
                 //"-T", "60",
                 "-m", "20",
                 "--fs-disk=10",
-                "-p", "tests/filesys/base/syn-read:syn-read",
-                "-p", "tests/filesys/base/child-syn-read:child-syn-read",
+                "-p", "tests/vm/pt-grow-stack:pt-grow-stack",
                 "--swap-disk=4",
                 "--",
                 "-q",
                 "-f", "run",
-                "syn-read"
+                "pt-grow-stack"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

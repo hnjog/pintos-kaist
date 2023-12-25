@@ -57,7 +57,9 @@ int dup2(int oldfd, int newfd);
 
 struct page *check_address(void *addr) {
 	if (is_kernel_vaddr(addr) || addr == NULL)
+	{
 		exit(-1);
+	}
 
 	return spt_find_page(&thread_current()->spt, addr);
 }
@@ -76,13 +78,16 @@ void validate_buffer(void *buffer, size_t size, bool to_write) {
     void *end_addr = pg_round_down(buffer + size);
 
     ASSERT(start_addr <= end_addr);
-    for (void *addr = end_addr; addr >= start_addr; addr -= PGSIZE) {
+    for (void *addr = end_addr; addr >= start_addr; addr -= PGSIZE) 
+	{
         struct page *pg = check_address(addr);
-        if (pg == NULL) {
+        if (pg == NULL) 
+		{
             exit(-1);
         }
         
-        if (pg->isWritable == false && to_write == true) {
+        if (pg->isWritable == false && to_write == true) 
+		{
             exit(-1);
         }
     }
@@ -129,11 +134,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		return;
 	}
 
-	struct thread* curr = thread_current();
+	if(check_address((void*)(f->rsp)) == NULL)
+	{
+		thread_exit();
+		return;
+	}
 
-	//check_address((void*)(f->rsp));
 #ifdef VM
-	thread_current()->user_rsp = f->rsp;
+	struct thread* curr = thread_current();
+	curr->user_rsp = f->rsp;
 #endif
 
 	switch (f->R.rax)
@@ -254,7 +263,12 @@ void halt (void)
 
 int exec (const char *file)
 {
-	check_address(file);
+	//check_address(file);
+	if(check_address(file) == NULL)
+	{
+		exit(-1);
+	}
+
 	size_t fileNameLen = strlen(file);
 
 	char* copy_fn = palloc_get_page(PAL_ZERO);
@@ -267,7 +281,7 @@ int exec (const char *file)
 
 	if(process_exec(copy_fn) == -1)
 	{
-		return -1;
+		exit(-1);
 	}
 	
 	NOT_REACHED();
@@ -289,25 +303,43 @@ void exit (int status)
 
 tid_t fork (const char *thread_name, struct intr_frame* f)
 {
-	check_address(thread_name);
+	//check_address(thread_name);
+	if(check_address(thread_name) == NULL)
+	{
+		//return -1;
+		exit(-1);
+	}
+
 	return process_fork(thread_name,f);
 }
 
 bool create (const char *file, unsigned initial_size)
 {
-	check_address(file);
+	if(check_address(file) == NULL)
+	{
+		exit(-1);
+	}
+
 	return filesys_create(file,initial_size);
 }
 
 bool remove (const char *file)
 {
-	check_address(file);
+	//check_address(file);
+	if(check_address(file) == NULL)
+	{
+		exit(-1);
+	}
 	return filesys_remove(file);
 }
 
 int open (const char *file)
 {
-	check_address(file);
+	if(check_address(file) == NULL)
+	{
+		exit(-1);
+	}
+	
 	lock_acquire(&filesys_lock);
 	struct file* targetFile = filesys_open(file);
 	lock_release(&filesys_lock);

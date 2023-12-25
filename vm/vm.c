@@ -35,10 +35,6 @@ page_get_type (struct page *page) {
 	switch (ty) {
 		case VM_UNINIT:
 			return VM_TYPE (page->uninit.type);
-		// case VM_ANON:
-		// 	return VM_TYPE (page->anon.type);
-		// case VM_FILE:
-		// 	return VM_TYPE (page->file.type);
 		default:
 			return ty;
 	}
@@ -107,31 +103,16 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	if(spt == NULL)
 		return NULL;
 
-	struct page *page = NULL;
-	//hash 내부 돌면서 va 찾기
+	struct page *page = (struct page *)malloc(sizeof(struct page));
+	struct hash_elem *e;
+	
+	page->va = pg_round_down(va); //해당 va가 속해있는 페이지 시작 주소를 갖는 page를 만든다.
 
-	struct hash_iterator i;
+	/* e와 같은 해시값을 갖는 page를 spt에서 찾은 다음 해당 hash_elem을 리턴 */
+	e = hash_find(&spt->findTable, &page->spt_hash_elem);
+	free(page);
 
-	hash_first(&i, &spt->findTable);
-	while (hash_next(&i))
-	{
-		struct page *lpPage = hash_entry(hash_cur(&i), struct page, spt_hash_elem);
-		if(lpPage == NULL)
-		{
-			// 뭔가 잘못된 상황이긴 한데...
-			// 강제로 멈춰야 하는건 그거대로 이상한가?
-			continue;
-		}
-
-		//va가 가리키는 가상 page의 시작 포인트(offset이 0으로 설정된 va) 반환
-		if(lpPage->va == pg_round_down(va))
-		{
-			page = lpPage;
-			break;
-		}
-	}
-
-	return page;
+	return e != NULL ? hash_entry(e, struct page, spt_hash_elem): NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -215,7 +196,6 @@ vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
 
-	//list_remove(&victim->frame_elem);
 	swap_out(victim->page);
 
 	return victim;
@@ -282,6 +262,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	// 따라서 'user' 영역이 아니면 안됨
 	if (is_kernel_vaddr(addr) || addr == NULL || not_present == false)
 	{
+		exit(-1);
 		return false;
 	}
 
@@ -433,7 +414,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 
 /* Free the resource hold by the supplemental page table */
 void
-supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) \
+supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED)
 {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
@@ -469,17 +450,6 @@ page_less (const struct hash_elem *a_,
   const struct page *b = hash_entry (b_, struct page, spt_hash_elem);
 
   return a->va < b->va;
-}
-
-struct page *
-page_lookup (const void *address) {
-  struct page p;
-  struct hash_elem *e;
-  struct hash* ha = &thread_current()->spt.findTable;
-
-  p.va = address;
-  e = hash_find (ha, &p.spt_hash_elem);
-  return e != NULL ? hash_entry (e, struct page, spt_hash_elem) : NULL;
 }
 
 void spt_destructor(struct hash_elem *e, void* aux){

@@ -31,20 +31,72 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 
 /* Swap in the page by read contents from the file. */
 static bool
-file_backed_swap_in (struct page *page, void *kva) {
+file_backed_swap_in (struct page *page, void *kva) 
+{
+	if(page == NULL)
+	{
+        return false;
+    }
+
 	struct file_page *file_page UNUSED = &page->file;
+
+    struct loadArgs *aux = (struct loadArgs*)page->uninit.aux;
+
+    struct file *file = aux->file;
+    off_t offset = aux->fileOfs;
+    size_t page_read_bytes = aux->readByte;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+    file_seek(file, offset);
+    if(file_read(file, kva, page_read_bytes) != (int)page_read_bytes)
+	{
+        return false;
+    }
+
+    memset(kva + page_read_bytes, 0, page_zero_bytes);
+
+    return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
-file_backed_swap_out (struct page *page) {
+file_backed_swap_out (struct page *page) 
+{
+    if(page == NULL)
+	{
+        return false;
+    }
+
 	struct file_page *file_page UNUSED = &page->file;
+
+    struct loadArgs *aux = (struct loadArgs *)page->uninit.aux;
+
+    // dirty check
+    if(pml4_is_dirty(thread_current()->pml4, page->va))
+	{
+        file_write_at(aux->file, page->va, aux->readByte, aux->fileOfs);
+        pml4_set_dirty(thread_current()->pml4, page->va, 0);
+    }
+    pml4_clear_page(thread_current()->pml4, page->va);
+
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
 static void
-file_backed_destroy (struct page *page) {
-	struct file_page *file_page UNUSED = &page->file;
+file_backed_destroy (struct page *page) 
+{
+	if(page == NULL)
+	{
+        return;
+    }
+
+	if (page->operations == &file_ops)
+	{
+		struct file_page *file_page UNUSED = &page->file;
+		struct loadArgs *aux = (struct loadArgs *)page->uninit.aux;
+		
+	}
 }
 
 /* Do the mmap */
@@ -61,12 +113,15 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 	// 파일을 다시 열어준다
 	// 정확히는 내부의 'open_cnt'를 조절하여
 	// 누가 함부로 닫지 않도록 해준다
-#ifdef VM
 	struct file* reopenFile = file_reopen(file);
 
 	void* origin_addr = addr;
 	size_t read_bytes = length > file_length(file) ? file_length(file) : length;
 	size_t zero_bytes = PGSIZE - read_bytes;
+
+	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
+    ASSERT(pg_ofs(addr) == 0);      // upage가 페이지 정렬되어 있는지 확인
+    ASSERT(offset % PGSIZE == 0); // ofs가 페이지 정렬되어 있는지 확인
 
 	while (read_bytes > 0 || zero_bytes > 0) 
 	{
@@ -103,8 +158,6 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 
 	// 시작 위치
 	return origin_addr;
-#endif
-	return NULL;
 }
 
 /* Do the munmap */
@@ -116,7 +169,7 @@ do_munmap (void *addr)
 	{
 		struct page* targetPage = spt_find_page(&curr->spt,addr);
 		if(targetPage == NULL)
-			break;
+			return;
 
 		struct loadArgs* aux = (struct loadArgs*)targetPage->uninit.aux;
 
