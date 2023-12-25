@@ -25,12 +25,12 @@
                 //"-T", "60",
                 "-m", "20",
                 "--fs-disk=10",
-                "-p", "tests/vm/pt-grow-stack:pt-grow-stack",
+                "-p", "tests/vm/mmap-write:mmap-write",
                 "--swap-disk=4",
                 "--",
                 "-q",
                 "-f", "run",
-                "pt-grow-stack"
+                "mmap-write"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

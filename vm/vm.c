@@ -262,7 +262,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	// 따라서 'user' 영역이 아니면 안됨
 	if (is_kernel_vaddr(addr) || addr == NULL || not_present == false)
 	{
-		exit(-1);
 		return false;
 	}
 
@@ -271,8 +270,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		return true;
 	}
 	
-    const uintptr_t one_megaByte = (1 << 12);
-	uintptr_t stack_limit = USER_STACK - one_megaByte; // pintOS에서 stack의 크기를 1MB로 제한하기에 
+	// 0x100000 == (0001 0000 0000 0000 0000 0000) == 1 << 20
+	// pintOS에서 stack의 크기를 1MB로 제한하기에 
+    const uintptr_t one_megaByte = (1 << 20);
+	uintptr_t stack_limit = USER_STACK - one_megaByte;
 	uintptr_t rsp = user ? f->rsp : thread_current()->user_rsp;
 
 	if (addr >= rsp - 8 && 
@@ -378,8 +379,8 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	hash_first(&i, &src->findTable);
 	while (hash_next(&i))
 	{
-		struct page *src_page =
-            hash_entry(hash_cur(&i), struct page, spt_hash_elem);
+		struct page *src_page = hash_entry(hash_cur(&i), struct page, spt_hash_elem);
+
         /*vm_alloc_page_with_initializer에 필요한 인자들*/
         enum vm_type dst_type = page_get_type(src_page);
         enum vm_type now_type = src_page->operations->type;
@@ -387,23 +388,33 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
         bool dst_writable = src_page->isWritable;
 
         /*UNINIT 처리*/
-        if (now_type == VM_UNINIT) {
+        if (now_type == VM_UNINIT) 
+		{
             vm_initializer *dst_init = src_page->uninit.init;
             void *dst_aux = src_page->uninit.aux;
             if (!vm_alloc_page_with_initializer(dst_type, dst_va, dst_writable,
-                                                dst_init, dst_aux)) {
+                                                dst_init, dst_aux)) 
+			{
                 return false;
             }
         }
         /*ANON, FILE 처리*/
-        else {
-            if (!vm_alloc_page(now_type, dst_va, dst_writable)) {
+        else 
+		{
+            if (vm_alloc_page(now_type, dst_va, dst_writable) == false)
+			{
                 return false;
             }
-            if (!vm_claim_page(dst_va)) {
+            if (vm_claim_page(dst_va) == false) 
+			{
                 return false;
             }
             struct page * dst_page = spt_find_page(dst, dst_va);
+
+			if(dst == NULL)
+			{
+				return false;
+			}
 
             memcpy(dst_page->frame->kva, src_page->frame->kva, PGSIZE);
         }
@@ -431,8 +442,8 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED)
     //     }
     // }
 
-	hash_clear(&spt->findTable,spt_destructor);
 	//hash_destroy(&spt->findTable,spt_destructor);
+	hash_clear(&spt->findTable,spt_destructor);
 }
 
 /* Returns a hash value for page p. */
@@ -452,7 +463,9 @@ page_less (const struct hash_elem *a_,
   return a->va < b->va;
 }
 
-void spt_destructor(struct hash_elem *e, void* aux){
+void spt_destructor(struct hash_elem *e, void* aux)
+{
     const struct page *p = hash_entry(e, struct page, spt_hash_elem);
+
     free(p);
 }
