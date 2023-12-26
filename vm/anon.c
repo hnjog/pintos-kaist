@@ -83,6 +83,7 @@ anon_swap_out(struct page *page)
 	struct anon_page *anon_page = &page->anon;
 
 	// swap table에서 page를 할당받을 수 있는 swap slot 찾기
+	// page 의 크기만큼 전부 써준다
     int page_no = bitmap_scan(swap_table, 0, 1, false);
 	
     if(page_no == BITMAP_ERROR)
@@ -128,11 +129,11 @@ anon_destroy(struct page *page)
 
 	if (page->operations == &anon_ops)
 	{
-		struct uninit_page *uninit = &page->uninit;
-		if (uninit->aux != NULL)
+		struct anon_page *anon_page = &page->anon;
+		if(anon_page->swap_index != -1)
 		{
-			free(uninit->aux);
-			uninit->aux = NULL;
+			bitmap_set(swap_table, anon_page->swap_index, false);
+			anon_page->swap_index = -1;
 		}
 	}
 }

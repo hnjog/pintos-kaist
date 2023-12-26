@@ -552,14 +552,13 @@ void *mmap(void *addr, size_t length, int writable, int fd, off_t offset)
 	}
 
 	struct file *target = process_get_file(fd);
-	if (target == NULL)
+	if (target == NULL ||
+		file_length(target) == 0)
 	{
 		return NULL;
 	}
 
-	void *mapP = do_mmap(addr, length, writable, target, offset);
-
-	return mapP;
+	return do_mmap(addr, length, writable, target, offset);
 }
 
 void munmap(void *addr)

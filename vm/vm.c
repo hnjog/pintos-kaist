@@ -150,24 +150,20 @@ vm_get_victim (void) {
 	{
 		return NULL;
 	}
-
 	struct frame *victim = NULL;
 	 
 	// frame 과 연결된 page의 access bit가 0인 녀석을 고른다
 	// clock 알고리즘
-	struct list_elem* tempElem = list_begin(&frame_list);
-	struct list_elem* endElem = list_tail(&frame_list);
-
-	struct thread* curr = thread_current();
 
 	if(startElem == NULL)
 	{
-		startElem = tempElem;
+		startElem = list_begin(&frame_list);
 	}
-	else
-	{
-		tempElem = startElem;
-	}
+
+	struct list_elem* tempElem = startElem;
+	struct list_elem* endElem = list_tail(&frame_list);
+
+	struct thread* curr = thread_current();
 
 	while (tempElem != endElem)
 	{
@@ -178,9 +174,14 @@ vm_get_victim (void) {
 		}
 		else
 		{
-			startElem = &victim->frame_elem;
+			startElem = tempElem->next;
+			if(startElem == endElem)
+			{
+				startElem = NULL;
+			}
 			return victim;
 		}
+		tempElem = tempElem->next;
 	}
 	
 	// 여기까지 온 경우, 모든 list의 access가 true여서 전부 false가 된 상황이다
@@ -194,9 +195,14 @@ vm_get_victim (void) {
 		}
 		else
 		{
-			startElem = &victim->frame_elem;
+			startElem = tempElem->next;
+			if(startElem == endElem)
+			{
+				startElem = NULL;
+			}
 			return victim;
 		}
+		tempElem = tempElem->next;
 	}
 
 	return NULL;
@@ -483,5 +489,6 @@ void spt_destructor(struct hash_elem *e, void* aux)
 {
     const struct page *p = hash_entry(e, struct page, spt_hash_elem);
 
-    free(p);
+    //free(p);
+	vm_dealloc_page(p);
 }

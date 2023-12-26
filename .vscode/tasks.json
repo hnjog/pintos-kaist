@@ -25,13 +25,13 @@
                 //"-T", "60",
                 "-m", "8",
                 "--fs-disk=10",
-                "-p", "tests/vm/swap-file:swap-file",
-                "-p", "../../tests/vm/large.txt:large.txt",
+                "-p", "tests/vm/page-merge-par:page-merge-par",
+                "-p", "tests/vm/child-sort:child-sort",
                 "--swap-disk=4",
                 "--",
                 "-q",
                 "-f", "run",
-                "swap-file"
+                "page-merge-par"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

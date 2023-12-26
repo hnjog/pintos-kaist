@@ -88,12 +88,7 @@ file_backed_destroy (struct page *page)
 
 	if (page->operations == &file_ops)
 	{
-		struct uninit_page *uninit = &page->uninit;
-		if (uninit->aux != NULL)
-		{
-			free(uninit->aux);
-			uninit->aux = NULL;
-		}
+		
 	}
 }
 
