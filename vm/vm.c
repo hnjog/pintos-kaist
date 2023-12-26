@@ -431,6 +431,10 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED)
 	 * TODO: writeback all the modified contents to the storage. */
 	struct hash_iterator i;
 
+	// hash table을 비우기 전
+	// 'file-backed' 인 경우
+	// munmap을 호출하여 (내부적으로 do_munmap 호출)
+	// (다만 process_cleanup에서 이 부분이 호출되기에, spt의 init 부분을 옮겨주었음)
     hash_first(&i, &spt->findTable);
     while(hash_next(&i))
 	{
@@ -443,7 +447,6 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED)
     }
 
 	hash_destroy(&spt->findTable,spt_destructor);
-	//hash_clear(&spt->findTable,spt_destructor);
 }
 
 /* Returns a hash value for page p. */

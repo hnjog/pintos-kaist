@@ -81,7 +81,6 @@ uninit_destroy (struct page *page)
 		
 		if (uninit->aux != NULL)
 		{
-			//file_close(uninit->aux);
 			free(uninit->aux);
 			uninit->aux = NULL;
 		}

@@ -74,8 +74,9 @@ file_backed_swap_out (struct page *page)
     // dirty check
     if(pml4_is_dirty(thread_current()->pml4, page->va))
 	{
+		// file에 수정된 부분을 write해준다
         file_write_at(aux->file, page->va, aux->readByte, aux->fileOfs);
-        pml4_set_dirty(thread_current()->pml4, page->va, 0);
+        pml4_set_dirty(thread_current()->pml4, page->va, false);
     }
     pml4_clear_page(thread_current()->pml4, page->va);
 
@@ -93,9 +94,12 @@ file_backed_destroy (struct page *page)
 
 	if (page->operations == &file_ops)
 	{
-		struct file_page *file_page UNUSED = &page->file;
-		struct loadArgs *aux = (struct loadArgs *)page->uninit.aux;
-
+		struct uninit_page *uninit = &page->uninit;
+		if (uninit->aux != NULL)
+		{
+			free(uninit->aux);
+			uninit->aux = NULL;
+		}
 	}
 }
 
@@ -117,7 +121,7 @@ do_mmap (void *addr, size_t length, int writable, struct file *file, off_t offse
 
 	void* origin_addr = addr;
 	size_t read_bytes = length > file_length(file) ? file_length(file) : length;
-	size_t zero_bytes = PGSIZE - read_bytes;
+	size_t zero_bytes = PGSIZE - (read_bytes % PGSIZE);
 
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
     ASSERT(pg_ofs(addr) == 0);      // upage가 페이지 정렬되어 있는지 확인
@@ -174,17 +178,14 @@ do_munmap (void *addr)
 		struct loadArgs *aux = (struct loadArgs *)targetPage->uninit.aux;
 
 		// null 인 경우 아래에서 null 참조가 일어나게 된다
-		if (aux != NULL)
+		// dirty check
+		if (pml4_is_dirty(curr->pml4, targetPage->va) == true)
 		{
-			// dirty check
-			if (pml4_is_dirty(curr->pml4, targetPage->va) == true)
-			{
-				file_write_at(aux->file, addr, aux->readByte, aux->fileOfs);
-				pml4_set_dirty(curr->pml4, targetPage->va, false);
-			}
-
-			pml4_clear_page(curr->pml4, targetPage->va);
+			file_write_at(aux->file, addr, aux->readByte, aux->fileOfs);
+			pml4_set_dirty(curr->pml4, targetPage->va, false);
 		}
+
+		pml4_clear_page(curr->pml4, targetPage->va);
 
 		addr += PGSIZE;
 	}

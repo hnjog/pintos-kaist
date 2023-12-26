@@ -47,7 +47,7 @@ static bool
 anon_swap_in(struct page *page, void *kva)
 {
 	struct anon_page *anon_page = &page->anon;
-	 // swap out된 page가 disk swap영역 어느 위치에 저장되었는지는 
+	// swap out된 page가 disk swap영역 어느 위치에 저장되었는지는 
     // anon_page 구조체 안에 저장되어 있다.
     int page_no = anon_page->swap_index;
 
@@ -72,12 +72,13 @@ static bool
 anon_swap_out(struct page *page)
 {
 	struct anon_page *anon_page = &page->anon;
-	 // swap table에서 page를 할당받을 수 있는 swap slot 찾기
+	// swap table에서 page를 할당받을 수 있는 swap slot 찾기
     int page_no = bitmap_scan(swap_table, 0, 1, false);
     if(page_no == BITMAP_ERROR)
 	{
         return false;
     }
+
     // 한 page를 disk에 쓰기 위해 SECTORS_PER_PAGE개의 섹터에 저장한다.
     // 이 때 disk의 각 섹터의 크기(DISK_SECTOR_SIZE)만큼 써 준다.
     for(int i=0; i<SECTORS_PER_PAGE; ++i)
@@ -107,12 +108,6 @@ anon_destroy(struct page *page)
 
 	if (page->operations == &anon_ops)
 	{
-		// struct anon_page *anon_page = &page->anon;
-		// if (anon_page != NULL)
-		// {
-		// 	file_close(anon_page);
-		// 	anon_page = NULL;
-		// }
 		struct uninit_page *uninit = &page->uninit;
 		if (uninit->aux != NULL)
 		{

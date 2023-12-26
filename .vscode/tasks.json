@@ -23,14 +23,15 @@
                 "-v",
                 "-k",
                 //"-T", "60",
-                "-m", "20",
+                "-m", "8",
                 "--fs-disk=10",
-                "-p", "tests/vm/mmap-shuffle:mmap-shuffle",
+                "-p", "tests/vm/swap-file:swap-file",
+                "-p", "../../tests/vm/large.txt:large.txt",
                 "--swap-disk=4",
                 "--",
                 "-q",
                 "-f", "run",
-                "mmap-shuffle"
+                "swap-file"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"
