@@ -23,6 +23,8 @@
 #include "vm/vm.h"
 #endif
 
+#include "userprog/syscall.h"
+
 #define MAX_ARGS 128
 
 static void process_cleanup (void);
@@ -280,7 +282,9 @@ process_exec (void *f_name) {
 	tokenizer(file_name, argv, &argc);
 
 	/* And then load the binary */
+	lock_acquire(&filesys_lock);
 	success = load (file_name, &_if);
+	lock_release(&filesys_lock);
 
 	/* If load failed, quit. */
 	if (!success) {

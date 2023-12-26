@@ -23,15 +23,15 @@
                 "-v",
                 "-k",
                 //"-T", "60",
-                "-m", "8",
+                "-m", "20",
                 "--fs-disk=10",
-                "-p", "tests/vm/page-merge-par:page-merge-par",
-                "-p", "tests/vm/child-sort:child-sort",
-                "--swap-disk=4",
+                "-p", "tests/vm/page-merge-stk:page-merge-stk",
+                "-p", "tests/vm/child-qsort:child-qsort",
+                "--swap-disk=10",
                 "--",
                 "-q",
                 "-f", "run",
-                "page-merge-par"
+                "page-merge-stk"
             ],
             "options": {
                 "cwd": "${workspaceFolder}/${input:project}/build"

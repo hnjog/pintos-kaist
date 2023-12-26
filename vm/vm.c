@@ -275,7 +275,6 @@ bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
-	struct page *page = NULL;
 
 	// addr은 '가상 메모리'의 위치
 	// 따라서 'user' 영역이 아니면 안됨
@@ -284,13 +283,14 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		return false;
 	}
 
+	// 페이지 요청했는데 존재한다
 	if(vm_claim_page(addr) == true)
 	{
 		return true;
 	}
 	
 	// 0x100000 == (0001 0000 0000 0000 0000 0000) == 1 << 20
-	// pintOS에서 stack의 크기를 1MB로 제한하기에 
+	// pintOS에서 stack의 크기를 1MB로 제한하기에 (by git book)
     const uintptr_t one_megaByte = (1 << 20);
 	uintptr_t stack_limit = USER_STACK - one_megaByte;
 	uintptr_t rsp = user ? f->rsp : thread_current()->user_rsp;
