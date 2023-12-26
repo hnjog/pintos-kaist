@@ -8,6 +8,7 @@
 #include "userprog/process.h"
 
 struct list frame_list;
+struct list_elem* startElem;
 
 void spt_destructor(struct hash_elem *e, void* aux);
 
@@ -24,6 +25,7 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
 	list_init(&frame_list);
+	startElem = NULL;
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -158,6 +160,15 @@ vm_get_victim (void) {
 
 	struct thread* curr = thread_current();
 
+	if(startElem == NULL)
+	{
+		startElem = tempElem;
+	}
+	else
+	{
+		tempElem = startElem;
+	}
+
 	while (tempElem != endElem)
 	{
 		victim = list_entry(tempElem,struct frame,frame_elem);
@@ -167,6 +178,7 @@ vm_get_victim (void) {
 		}
 		else
 		{
+			startElem = &victim->frame_elem;
 			return victim;
 		}
 	}
@@ -182,6 +194,7 @@ vm_get_victim (void) {
 		}
 		else
 		{
+			startElem = &victim->frame_elem;
 			return victim;
 		}
 	}

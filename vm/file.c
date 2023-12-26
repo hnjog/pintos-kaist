@@ -25,8 +25,6 @@ bool
 file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &file_ops;
-
-	struct file_page *file_page = &page->file;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -37,8 +35,6 @@ file_backed_swap_in (struct page *page, void *kva)
 	{
         return false;
     }
-
-	struct file_page *file_page UNUSED = &page->file;
 
     struct loadArgs *aux = (struct loadArgs*)page->uninit.aux;
 
@@ -66,8 +62,6 @@ file_backed_swap_out (struct page *page)
 	{
         return false;
     }
-
-	struct file_page *file_page UNUSED = &page->file;
 
     struct loadArgs *aux = (struct loadArgs *)page->uninit.aux;
 

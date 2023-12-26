@@ -7,6 +7,9 @@
 #include "lib/kernel/bitmap.h"
 
 struct bitmap *swap_table;
+
+// page size를 디스크 섹터 크기로 나눈다
+// 4096 / 512 이므로 8
 const size_t SECTORS_PER_PAGE = PGSIZE / DISK_SECTOR_SIZE;
 
 /* DO NOT MODIFY BELOW LINE */
@@ -27,8 +30,12 @@ static const struct page_operations anon_ops = {
 void vm_anon_init(void)
 {
 	/* TODO: Set up the swap_disk. */
+
+	// disk_get을 
 	swap_disk = disk_get(1, 1);
 	size_t swap_size = disk_size(swap_disk) / SECTORS_PER_PAGE;
+
+	// 비트맵 할당
 	swap_table = bitmap_create(swap_size);
 }
 
@@ -51,6 +58,8 @@ anon_swap_in(struct page *page, void *kva)
     // anon_page 구조체 안에 저장되어 있다.
     int page_no = anon_page->swap_index;
 
+	// 특정한 수가 세팅되어 있는지를 확인
+	// swap영역에 내 index가 세팅되어 있나?
     if(bitmap_test(swap_table, page_no) == false)
 	{
         return false;
@@ -72,10 +81,13 @@ static bool
 anon_swap_out(struct page *page)
 {
 	struct anon_page *anon_page = &page->anon;
+
 	// swap table에서 page를 할당받을 수 있는 swap slot 찾기
     int page_no = bitmap_scan(swap_table, 0, 1, false);
+	
     if(page_no == BITMAP_ERROR)
 	{
+		// 할당 불가...
         return false;
     }
 
@@ -83,10 +95,18 @@ anon_swap_out(struct page *page)
     // 이 때 disk의 각 섹터의 크기(DISK_SECTOR_SIZE)만큼 써 준다.
     for(int i=0; i<SECTORS_PER_PAGE; ++i)
 	{
+		// bit맵의 비어있는 위치에
+		// page 크기만큼 써준다
+		// 그렇기에 SECTORS_PER_PAGE 를 pgsize / DISK_SECTOR_SIZE 로 잡았음
+
+		// 추가적인 몇가지 내용들
+		// swap disk의 용량 혹은 섹터가 부족한 경우,
+		// 일반적(pintos에서 안그럴 수 있음)으로는
+		// 추가적인 swap 영역 할당하거나, 다른 swap 영역을 할당할 수 있는지 체크한다
         disk_write(swap_disk, page_no *SECTORS_PER_PAGE + i, page->va + DISK_SECTOR_SIZE * i);
     }
 
-    // swap table의 해당 page에 대한 swap slot의 bit를 ture로 바꿔준다.
+    // swap table의 해당 page에 대한 swap slot의 bit를 true로 바꿔준다.
     // 해당 page의 pte에서 present bit을 0으로 바꿔준다.
     // 이제 프로세스가 이 page에 접근하면 page fault가 뜬다.
     bitmap_set(swap_table, page_no, true);
