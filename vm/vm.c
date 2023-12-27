@@ -303,6 +303,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	// rsp - 8 == addr 인 경우가 존재하고, 이를 stack_grow로 해결할 수 있음
 	// -> PUSH 명령 (stack에 데이터 추가)
 	// rsp의 다음 위치에 데이터를 추가하려 할 때, stack의 크기를 늘려줌으로서 이를 해결할 수 있음
+	// by git book
+	/*
+		However, the x86-64 PUSH instruction checks access permissions before it adjusts the stack pointer, 
+		so it may cause a page fault 8 bytes below the stack pointer.
+	*/
 	if (addr >= rsp - 8 && 
 	addr <= USER_STACK  &&
 	 addr >= stack_limit)
