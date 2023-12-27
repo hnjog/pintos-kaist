@@ -105,13 +105,18 @@ spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	if(spt == NULL)
 		return NULL;
 
+	// hash_find를 사용하기 위하여 (정확히는 page 내부의 hash_elem을 이용하기 위함)
+	// malloc을 통해 page를 할당받음
 	struct page *page = (struct page *)malloc(sizeof(struct page));
 	struct hash_elem *e;
 	
-	page->va = pg_round_down(va); //해당 va가 속해있는 페이지 시작 주소를 갖는 page를 만든다.
+	//해당 va가 속해있는 페이지 시작 주소를 갖는 page를 만든다.
+	page->va = pg_round_down(va); 
 
-	/* e와 같은 해시값을 갖는 page를 spt에서 찾은 다음 해당 hash_elem을 리턴 */
+	// e와 같은 해시값을 갖는 page를 spt에서 찾은 다음 해당 hash_elem을 리턴
 	e = hash_find(&spt->findTable, &page->spt_hash_elem);
+
+	// e 찾았으니 볼일 없음
 	free(page);
 
 	return e != NULL ? hash_entry(e, struct page, spt_hash_elem): NULL;
@@ -406,7 +411,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
         void *dst_va = src_page->va;
         bool dst_writable = src_page->isWritable;
 
-        /*UNINIT 처리*/
         if (now_type == VM_UNINIT) 
 		{
             vm_initializer *dst_init = src_page->uninit.init;
@@ -417,7 +421,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
                 return false;
             }
         }
-        /*ANON, FILE 처리*/
         else 
 		{
             if (vm_alloc_page(now_type, dst_va, dst_writable) == false)
@@ -430,7 +433,7 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
             }
             struct page * dst_page = spt_find_page(dst, dst_va);
 
-			if(dst == NULL)
+			if(dst_page == NULL)
 			{
 				return false;
 			}
@@ -489,6 +492,5 @@ void spt_destructor(struct hash_elem *e, void* aux)
 {
     const struct page *p = hash_entry(e, struct page, spt_hash_elem);
 
-    //free(p);
 	vm_dealloc_page(p);
 }
