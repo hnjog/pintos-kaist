@@ -12,7 +12,6 @@
 #include "intrinsic.h"
 typedef int pid_t;
 
-
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
 void check_address(void *addr);
@@ -175,16 +174,9 @@ void halt(void)
 
 void exit(int status)
 {
-	/* return status to the kernel if the user process's parent was waiting.
-	 * the status 0 means success
-	 *
-	 * 1. 부모에게 알릴 내 익싯 상태 값 스레드 구조체에 넣고 초기화
-	 * 2. 상태값 현재 스레드의 exit_flag에 업데이트
-	 * 3. thread_exit */
 
 	struct thread *curr = thread_current();
 	curr->exit_status = status;
-	curr->exit_flag = true;
 	thread_exit();
 }
 

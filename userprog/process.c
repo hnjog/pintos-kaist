@@ -221,7 +221,7 @@ int process_exec(void *f_name)
 	success = load(file_name, &_if);
 
 	// Argument Passing ~
-	argument_stack(parse, count, &_if.rsp); // 함수 내부에서 parse와 rsp의 값을 직접 변경하기 위해 주소 전달
+	argument_stack(parse, count, &_if); // 함수 내부에서 parse와 rsp의 값을 직접 변경하기 위해 주소 전달
 	_if.R.rdi = count;
 	_if.R.rsi = (char *)_if.rsp + 8;
 
@@ -249,19 +249,23 @@ int process_exec(void *f_name)
  * does nothing. */
 int process_wait(tid_t child_tid UNUSED)
 {
-	// struct thread *child = get_child_process(child_tid);
-	// if (child == NULL)
-	// 	return -1;
+	struct thread *child = get_child_process(child_tid);
+	if (child == NULL)
+		return -1;
 
-	// sema_down(&child->exit_sema);
-	// int exit_status = child->exit_status; // 부모님, 저 이제 끝났습니다
-	// list_remove(&child->child_elem);	  // 그래? 그럼 이제 넌 호적에서 파야겠다
-	// sema_up(&child->wait_sema);			  // 아 세마도 뺏어야지
+	sema_down(&child->exit_sema);
+	int exit_status = child->exit_status; // 부모님, 저 이제 끝났습니다
+	list_remove(&child->child_elem);	  // 그래? 그럼 이제 넌 호적에서 파야겠다
+	sema_up(&child->wait_sema);			  // 아 세마도 뺏어야지
 
-	// return exit_status;
-	for (int i = 0; i < 1000000000000; i++)
-	{
-	}
+	return exit_status;
+
+	/**
+	 * 승현 코치님 : sema_down으로 끝나면 안되는 이유
+	 * 
+	 * 
+	*/
+
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -281,6 +285,7 @@ void process_exit(void)
 
 	sema_up(&curr->wait_sema);
 	sema_down(&curr->exit_sema);
+	// 승현 코치님 : exit 하면 안되는 이유
 }
 
 /* Free the current process's resources. */
@@ -695,25 +700,24 @@ rsp: 스택 포인터를 가리키는 주소 값 (&_if.rsp)
 */
 void argument_stack(char **parse, int count, void **rsp) // 주소를 전달받았으므로 이중 포인터 사용
 {
-	// 프로그램 이름, 인자 문자열 push
-	for (int i = count - 1; i > -1; i--) // Minus i to store the elements from the end of the array.
+	for (int i = count - 1; i > -1; i--)
 	{
 		for (int j = strlen(parse[i]); j > -1; j--)
 		{
-			(*rsp)--;					  // 문자 한개당 1바이트씩 감소
-			**(char **)rsp = parse[i][j]; // parse[i][j]에 들어있는 값을 현재의 스택 주소(rsp)에 저장 (for문 돌면서 b, a, r, \0 저장)
+			// parse[i][j]에 들어있는 값(b, a, r, \0)을 스택 주소(rsp)를 1씩 감소시켜 저장
+			(*rsp)--;
+			**(char **)rsp = parse[i][j]; 
 		}
 		parse[i] = *(char **)rsp; // parse[i]를 현재 문자열의 시작 주소로 업데이트
 	}
 
-	// 정렬 패딩 push
+	// alignment
 	int padding = (int)*rsp % 8;
 	for (int i = 0; i < padding; i++)
 	{
 		(*rsp)--;
 		**(uint8_t **)rsp = 0; // rsp 직전까지 값 채움(후위연산이라)
 	}
-
 	// 인자 문자열 종료를 나타내는 0 push
 	(*rsp) -= 8;
 	**(char ***)rsp = 0; // char* 타입의 0 추가

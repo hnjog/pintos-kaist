@@ -122,12 +122,11 @@ struct thread
 	struct list_elem child_elem;
 
 	struct file *running;
-	bool exit_flag; /* exit flag to let parent process knows */
 	int exit_status;
 
 	struct semaphore load_sema;
 	struct semaphore exit_sema;
-	struct semaphore wait_sema; // free
+	struct semaphore wait_sema;
 
 	struct file **fdt; // 파일 디스크립터 테이블(프로세스당 개별적으로 존재). this points the fd table
 	int next_fd;	   // 다음 fd 인덱스

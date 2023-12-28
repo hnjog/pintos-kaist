@@ -135,7 +135,6 @@ void thread_init(void)
 	list_push_back(&all_list, &(initial_thread->allElem));
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid();
-	initial_thread->exit_flag = false; // proejct 2:syscall
 	initial_thread->exit_status = 0;
 }
 
